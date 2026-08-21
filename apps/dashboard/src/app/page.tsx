@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CreateBot } from "@/components/CreateBot";
 import { Section, Shell } from "@/components/Shell";
 import { listBots } from "@/lib/data";
 
@@ -10,6 +11,8 @@ export default async function Home() {
   return (
     <Shell>
       <Section n="01" label="Bots" title="Your bots">
+        <CreateBot />
+
         {bots.length === 0 ? (
           <p className="empty-note">
             No bots yet. Create one, design a pet, and feed it some documents.

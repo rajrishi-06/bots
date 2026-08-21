@@ -22,6 +22,14 @@ let orgId: string;
 let botA: string;
 let botB: string;
 
+/** Run with an ORG scope set, exactly as the dashboard does. */
+async function asOrg<T>(orgId: string | null, fn: (tx: postgres.TransactionSql) => Promise<T>): Promise<T> {
+  return app.begin(async (tx) => {
+    if (orgId) await tx.unsafe(`SET LOCAL app.org_id = '${orgId}'`);
+    return fn(tx);
+  }) as Promise<T>;
+}
+
 /** Run one statement with a tenant scope set, exactly as the API does. */
 async function asBot<T>(botId: string | null, fn: (tx: postgres.TransactionSql) => Promise<T>): Promise<T> {
   return app.begin(async (tx) => {
@@ -128,6 +136,39 @@ describe("tenant isolation", () => {
     const msgs = await asBot(botA, (tx) => tx`SELECT id FROM messages`);
     expect(convs.length).toBe(0);
     expect(msgs.length).toBe(0);
+  });
+});
+
+describe("org scope — the dashboard's view", () => {
+  // The child tables key on app.bot_id, which is right for the widget: it serves
+  // one bot. But the dashboard lists an ORG's bots and counts their documents in
+  // one query, with no single bot_id to set — and every count came back 0.
+  // Silently empty is the worst way for an authorisation rule to be wrong.
+  it("sees the children of every bot in its own org", async () => {
+    const rows = await asOrg(orgId, (tx) => tx`SELECT bot_id FROM chunks`);
+    expect(rows.length).toBe(2); // one from bot A, one from bot B
+  });
+
+  it("does NOT see another org's children", async () => {
+    const [other] = await owner`INSERT INTO organizations (name) VALUES ('Rival') RETURNING id`;
+    try {
+      const rows = await asOrg(other!.id, (tx) => tx`SELECT id FROM chunks`);
+      expect(rows.length).toBe(0);
+    } finally {
+      await owner`DELETE FROM organizations WHERE id = ${other!.id}`;
+    }
+  });
+
+  it("still returns nothing with no scope at all", async () => {
+    const rows = await asOrg(null, (tx) => tx`SELECT id FROM chunks`);
+    expect(rows.length).toBe(0);
+  });
+
+  it("a bot scope stays narrow even though the org branch exists", async () => {
+    // The widget path sets only app.bot_id, so the org branch must not widen it.
+    const rows = await asBot(botA, (tx) => tx`SELECT bot_id FROM chunks`);
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.bot_id).toBe(botA);
   });
 });
 

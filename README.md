@@ -3,6 +3,8 @@
 Custom visual pets that answer from your documents, embeddable anywhere with one
 `<script>` tag.
 
+[`PLAN.md`](./PLAN.md) tracks what is done, outstanding, and worth improving.
+
 Read [`DESIGN.md`](./DESIGN.md) before touching any interface code. If the file
 and the code disagree, the file is wrong and gets updated — the code does not
 drift silently.

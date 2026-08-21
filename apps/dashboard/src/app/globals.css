@@ -68,15 +68,24 @@ button, input, select, textarea { font: inherit; border-radius: 2px; }
 }
 
 .shell { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+/* Wide content scrolls in its own box; the page itself never does. */
+body { overflow-x: hidden; }
+pre { max-width: 100%; overflow-x: auto; }
+table { display: block; overflow-x: auto; }
+@media (min-width: 700px) { table { display: table; } }
 
 /* The rail: a two-column measured grid, repeated down every screen. */
 .section { padding: 40px 0; border-top: 1px solid var(--line-strong); }
 .section:first-child { border-top: 0; }
 .rail { display: grid; gap: 40px; }
 @media (min-width: 1024px) {
-  .rail { grid-template-columns: 176px 1fr; }
+  /* minmax(0, 1fr), NOT 1fr: a grid track defaults to min-width:auto, so one
+     wide child — the embed snippet — expands the whole column instead of
+     scrolling inside itself, and every element in the row goes with it. */
+  .rail { grid-template-columns: 176px minmax(0, 1fr); }
   .rail > .rail-label { position: sticky; top: 28px; align-self: start; }
 }
+.rail > * { min-width: 0; }
 
 h1 { font-family: var(--display); font-size: clamp(1.5rem, 3vw, 2.25rem); line-height: 1.1; margin: 0; font-weight: 600; }
 h2 { font-family: var(--display); font-size: 1.25rem; line-height: 1.2; margin: 0 0 12px; font-weight: 600; }
@@ -142,13 +151,17 @@ header .mark {
 .tabs a[data-active="true"] { color: var(--ink); border-bottom-color: var(--ink); }
 
 .empty-note { color: var(--faint); font-size: 0.875rem; padding: 24px 0; }
+/* Borders on the CELLS, not a painted gap on the container: an auto-fill grid
+   keeps its empty tracks, and a container background showed through them as a
+   grey slab next to a single pet. */
 .grid-pets {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 1px; background: var(--line); border: 1px solid var(--line);
+  gap: 10px;
 }
 .pet-cell {
-  background: var(--bg); padding: 18px 14px; display: flex;
-  flex-direction: column; align-items: center; gap: 8px; text-align: center;
+  background: var(--bg); border: 1px solid var(--line); padding: 18px 14px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  text-align: center;
 }
-.pet-cell[data-active="true"] { background: var(--surface); }
+.pet-cell[data-active="true"] { background: var(--surface); border-color: var(--line-strong); }
 .pet-cell svg { width: 96px; height: 96px; }
