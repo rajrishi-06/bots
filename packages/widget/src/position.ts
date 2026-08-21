@@ -1,0 +1,141 @@
+/**
+ * Geometry helpers for the floating assistant.
+ *
+ * Ported from portfolio-v2 with one change (per-bot storage key). These are
+ * pure framework-agnostic functions and the behaviour they encode — clamping on
+ * resize while preserving the user's UNCLAMPED intent, and growing the panel
+ * into whichever side has room — was worked out against real devices. Rewriting
+ * it for Preact would have thrown that away for nothing.
+ *
+ * The launcher's position (viewport coordinates of its top-left corner) is the
+ * single source of truth: it's draggable, persisted across reloads, and clamped
+ * back on-screen when the window resizes. The panel doesn't have a fixed corner
+ * — it computes where to open from the launcher's current position, growing into
+ * whichever side has the most room.
+ */
+
+export const LAUNCHER_SIZE = 64; // matches h-16 w-16 on the launcher button
+export const VIEWPORT_MARGIN = 16; // min gap kept from every screen edge
+const DEFAULT_INSET = 24; // resting distance from the corner (~bottom-6/right-6)
+const PANEL_GAP = 12; // gap between the launcher and the opened panel
+const PANEL_MAX_W = 400;
+const PANEL_MAX_H = 620;
+const MOBILE_BP = 640; // below this the panel sizes itself as a roomy overlay
+const MOBILE_MARGIN = 20; // side gap on phones, so the page shows around the panel
+const MOBILE_MAX_VH = 0.74; // panel never taller than this fraction of the screen
+/**
+ * Namespaced per bot: two bots embedded on the same site must not fight over
+ * one stored position. Set once by `configureStorage` before any read.
+ */
+let STORAGE_KEY = "petbot-launcher-pos";
+
+export function configureStorage(botKey: string): void {
+  STORAGE_KEY = `petbot-launcher-pos:${botKey}`;
+}
+
+export interface Point {
+  x: number;
+  y: number;
+}
+
+export interface PanelBox {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+const clamp = (v: number, min: number, max: number): number =>
+  Math.min(Math.max(v, min), max);
+
+/** Resting spot for a first-time visitor: the bottom-right corner. */
+export function defaultLauncherPos(vw: number, vh: number): Point {
+  return {
+    x: vw - LAUNCHER_SIZE - DEFAULT_INSET,
+    y: vh - LAUNCHER_SIZE - DEFAULT_INSET,
+  };
+}
+
+/** Force a launcher position to sit fully within the viewport (with margin). */
+export function clampLauncherPos(p: Point, vw: number, vh: number): Point {
+  return {
+    x: clamp(p.x, VIEWPORT_MARGIN, Math.max(VIEWPORT_MARGIN, vw - LAUNCHER_SIZE - VIEWPORT_MARGIN)),
+    y: clamp(p.y, VIEWPORT_MARGIN, Math.max(VIEWPORT_MARGIN, vh - LAUNCHER_SIZE - VIEWPORT_MARGIN)),
+  };
+}
+
+/**
+ * Read the raw saved position WITHOUT clamping — the user's intended spot.
+ * Returns null when nothing valid is stored. Callers clamp this for display so
+ * the persisted intent survives a temporary shrink-then-grow of the window.
+ */
+export function readStoredPos(): Point | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const p = JSON.parse(raw) as Partial<Point>;
+      if (typeof p?.x === "number" && typeof p?.y === "number") {
+        return { x: p.x, y: p.y };
+      }
+    }
+  } catch {
+    /* localStorage unavailable / corrupt — treat as no stored position */
+  }
+  return null;
+}
+
+/** Saved launcher position clamped to the current viewport, or the default. */
+export function loadLauncherPos(vw: number, vh: number): Point {
+  const stored = readStoredPos();
+  return stored ? clampLauncherPos(stored, vw, vh) : defaultLauncherPos(vw, vh);
+}
+
+export function saveLauncherPos(p: Point): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
+  } catch {
+    /* private mode / quota — position simply won't persist */
+  }
+}
+
+/**
+ * Decide where the panel opens given the launcher's current position. It
+ * anchors to the launcher's nearest edges and extends toward the open space
+ * (up if the launcher sits low, down if high; left if it's on the right side,
+ * right if on the left), then is clamped fully on-screen.
+ */
+export function placePanel(launcher: Point, vw: number, vh: number): PanelBox {
+  const mobile = vw < MOBILE_BP;
+
+  // On phones, keep a generous side margin (so the page stays visible behind the
+  // panel) and cap the height to a fraction of the screen — a roomy overlay, not
+  // a full-screen takeover. On larger screens, the original floating-card sizing.
+  const hMargin = mobile ? MOBILE_MARGIN : VIEWPORT_MARGIN;
+  const width = Math.min(PANEL_MAX_W, vw - hMargin * 2);
+  const maxH = mobile ? Math.min(PANEL_MAX_H, Math.round(vh * MOBILE_MAX_VH)) : PANEL_MAX_H;
+  const height = Math.min(maxH, vh - VIEWPORT_MARGIN * 2);
+
+  const centerX = launcher.x + LAUNCHER_SIZE / 2;
+  const centerY = launcher.y + LAUNCHER_SIZE / 2;
+
+  // Horizontal: align to the launcher edge nearer the screen edge so the panel
+  // grows into the wider gap.
+  let left =
+    centerX > vw / 2
+      ? launcher.x + LAUNCHER_SIZE - width // launcher on the right → grow left
+      : launcher.x; // launcher on the left → grow right
+
+  // Vertical: open upward when the launcher is in the lower half, else downward.
+  let top =
+    centerY > vh / 2
+      ? launcher.y - PANEL_GAP - height // grow up
+      : launcher.y + LAUNCHER_SIZE + PANEL_GAP; // grow down
+
+  // Clamp on-screen. The horizontal bound uses `hMargin`, so on mobile (where
+  // the width already fills the space between the margins) the panel settles
+  // centered instead of pinned to whichever side the launcher happened to be on.
+  left = clamp(left, hMargin, vw - width - hMargin);
+  top = clamp(top, VIEWPORT_MARGIN, vh - height - VIEWPORT_MARGIN);
+
+  return { left, top, width, height };
+}

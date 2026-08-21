@@ -1,0 +1,20 @@
+{
+  "name": "@bots/sdk-js",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "size": "size-limit",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@size-limit/preset-small-lib": "^11.1.6",
+    "size-limit": "^11.1.6",
+    "typescript": "5.7.3",
+    "vite": "^6.0.7"
+  },
+  "size-limit": [
+    { "name": "loader (gzip)", "path": "dist/loader.js", "limit": "2 kB", "gzip": true }
+  ]
+}

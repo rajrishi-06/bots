@@ -37,3 +37,6 @@ jobs:
       - run: pnpm --filter @bots/db migrate
       - run: pnpm typecheck
       - run: pnpm test
+      # A fat embeddable is a dead embeddable. 30 kB for the widget, 2 kB for
+      # the loader — enforced here, not in a comment somebody stops reading.
+      - run: pnpm --filter @bots/widget --filter @bots/sdk-js run size

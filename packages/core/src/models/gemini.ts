@@ -33,8 +33,24 @@ const EMBED_MODEL = process.env.GEMINI_EMBED_MODEL ?? "gemini-embedding-2";
 const RETRY_STATUSES = [429, 500, 502, 503, 504];
 const MAX_ATTEMPTS = 4;
 
-function isTransient(err: unknown): boolean {
+/**
+ * A 429 means two different things and only one of them is worth retrying.
+ *
+ *   - per-minute rate limiting: backing off works, and is the common case.
+ *   - hard quota exhausted ("You exceeded your current quota, please check your
+ *     plan and billing details"): backing off cannot help until the quota
+ *     window rolls over, which is hours away.
+ *
+ * Retrying the second one four times adds ~20 seconds to an error the caller is
+ * going to receive regardless, and it looks like a hang. So it is not retried,
+ * and the message says what actually happened instead of "failed after 4 attempts".
+ */
+const HARD_QUOTA = /exceeded your current quota|check your plan and billing/i;
+
+/** Exported so the decision boundary can be tested without four seconds of backoff. */
+export function isTransient(err: unknown): boolean {
   const text = err instanceof Error ? err.message : String(err);
+  if (HARD_QUOTA.test(text)) return false;
   return RETRY_STATUSES.some((s) => text.includes(String(s)));
 }
 
@@ -52,10 +68,16 @@ async function withRetry<T>(label: string, fn: () => Promise<T>, signal?: AbortS
       await new Promise((r) => setTimeout(r, delay));
     }
   }
-  throw new Error(
-    `${label} failed after ${MAX_ATTEMPTS} attempts: ${last instanceof Error ? last.message : String(last)}`,
-    { cause: last },
-  );
+  const detail = last instanceof Error ? last.message : String(last);
+  if (HARD_QUOTA.test(detail)) {
+    throw new Error(
+      `${label}: the model API quota is exhausted for this key. Not retried — ` +
+        `backing off cannot clear a quota window. Enable billing, wait for the ` +
+        `reset, or point GEMINI_CHAT_MODEL at a model with remaining quota.`,
+      { cause: last },
+    );
+  }
+  throw new Error(`${label} failed after ${MAX_ATTEMPTS} attempts: ${detail}`, { cause: last });
 }
 
 /** Gemini's own cap on inputs per embedContent batch. */
