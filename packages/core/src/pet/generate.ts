@@ -1,4 +1,3 @@
-import { Type } from "@google/genai";
 import type { ModelProvider } from "../models/provider.js";
 import { describePaletteIssues, validatePetPalette } from "./palette.js";
 import { PART_OPTIONS, SKELETONS, petSpecSchema, type PetSpec } from "./spec.js";
@@ -12,39 +11,46 @@ import { PART_OPTIONS, SKELETONS, petSpecSchema, type PetSpec } from "./spec.js"
  * task, and paying for a large model's thinking tokens buys nothing.
  */
 
-/** JSON Schema for constrained decoding. Derived from the Zod enums so the two
- *  cannot drift — adding a part in spec.ts is the only edit needed. */
+/**
+ * JSON Schema for constrained decoding. Derived from the Zod enums so the two
+ * cannot drift — adding a part in spec.ts is the only edit needed.
+ *
+ * Types are written as plain strings rather than the SDK's `Type` enum (whose
+ * members are exactly these strings). This file is reachable from
+ * `@bots/core/pet`, which the widget imports for PetSpec — a value import of
+ * the Gemini SDK here would drag the whole thing into a 30KB bundle.
+ */
 const responseSchema = {
-  type: Type.OBJECT,
+  type: "OBJECT",
   properties: {
-    name: { type: Type.STRING },
-    skeleton: { type: Type.STRING, enum: [...SKELETONS] },
+    name: { type: "STRING" },
+    skeleton: { type: "STRING", enum: [...SKELETONS] },
     parts: {
-      type: Type.OBJECT,
+      type: "OBJECT",
       properties: Object.fromEntries(
         Object.entries(PART_OPTIONS).map(([slot, options]) => [
           slot,
-          { type: Type.STRING, enum: [...options] },
+          { type: "STRING", enum: [...options] },
         ]),
       ),
       required: Object.keys(PART_OPTIONS),
     },
     palette: {
-      type: Type.OBJECT,
+      type: "OBJECT",
       properties: Object.fromEntries(
         ["shellHi", "shellLo", "plateHi", "plateLo", "visorHi", "visorLo", "lit"].map((k) => [
           k,
-          { type: Type.STRING },
+          { type: "STRING" },
         ]),
       ),
       required: ["shellHi", "shellLo", "plateHi", "plateLo", "visorHi", "visorLo", "lit"],
     },
     personality: {
-      type: Type.OBJECT,
+      type: "OBJECT",
       properties: {
-        energy: { type: Type.NUMBER },
-        curiosity: { type: Type.NUMBER },
-        blurb: { type: Type.STRING },
+        energy: { type: "NUMBER" },
+        curiosity: { type: "NUMBER" },
+        blurb: { type: "STRING" },
       },
       required: ["energy", "curiosity", "blurb"],
     },
