@@ -193,3 +193,29 @@ describe("candidate depth", () => {
     expect(CANDIDATE_K).toBeGreaterThanOrEqual(50);
   });
 });
+
+describe("lexical retrieval", () => {
+  // Regression guard for the bug the eval harness surfaced: websearch_to_tsquery
+  // ANDs every term, so a natural-language question matched nothing and BM25
+  // silently contributed zero rows to every hybrid search.
+  it("matches a long natural-language question, not just keywords", async () => {
+    const { trace } = await run("How long do EU customers have to request a refund?", {
+      stages: { dense: false, bm25: true, rerank: false, rewrite: false },
+    });
+    expect(trace.bm25Count).toBeGreaterThan(0);
+  });
+
+  it("finds the right chunk on a question with no exact phrase match", async () => {
+    const { chunks } = await run("what is the refund window for customers in Europe", {
+      stages: { dense: false, bm25: true, rerank: false, rewrite: false },
+    });
+    expect(chunks.some((c) => c.content.includes("14 days"))).toBe(true);
+  });
+
+  it("returns nothing for a query sharing no vocabulary with the corpus", async () => {
+    const { trace } = await run("zzzz qqqq wwww", {
+      stages: { dense: false, bm25: true, rerank: false, rewrite: false },
+    });
+    expect(trace.bm25Count).toBe(0);
+  });
+});

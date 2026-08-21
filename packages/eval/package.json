@@ -1,26 +1,22 @@
 {
-  "name": "@bots/db",
+  "name": "@bots/eval",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./schema": "./src/schema.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
-    "generate": "drizzle-kit generate",
-    "migrate": "tsx src/migrate.ts",
-    "studio": "drizzle-kit studio",
+    "bench": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "@bots/core": "workspace:*",
-    "drizzle-orm": "^0.44.2",
+    "@bots/rag": "workspace:*",
     "postgres": "^3.4.5"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.31.1",
     "typescript": "5.7.3",
     "vitest": "3.0.5"
   }
