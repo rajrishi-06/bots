@@ -6,7 +6,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./pet": "./src/pet/index.ts",
-    "./models": "./src/models/index.ts"
+    "./models": "./src/models/index.ts",
+    "./rag": "./src/rag/index.ts",
+    "./contrast": "./src/contrast.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "dashboard",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@bots/dashboard", "dev"],
+      "port": 3001
+    },
+    {
       "name": "pet-gallery",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@bots/pet-engine", "dev"],
