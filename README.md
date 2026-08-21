@@ -26,6 +26,18 @@ packages/
 infra/         AWS CDK
 ```
 
+## Status
+
+| Phase | State |
+| --- | --- |
+| 0 Foundation, design thesis, schema, RLS, CI | done |
+| 1 Ingest + retrieval + gate + eval harness | done, verified against live models |
+| 2 Pet engine, generation, collections, hot-swap | done |
+| 3 Widget + loader (17.3 kB / 419 B gzip) | done |
+| 4 Desktop (Tauri) | **written, never compiled** — needs a Rust toolchain |
+| 5 Studio + retrieval debug panel | done |
+| Infra (CDK) | synthesises; **nothing deployed** |
+
 ## Getting started
 
 ```bash
