@@ -4,13 +4,12 @@ Tauri v2 shell. The pet floats over the desktop; the chat panel is
 `@bots/widget` unchanged — a different shell around the same Preact app, not a
 second implementation.
 
-> **Not built yet.** This needs a Rust toolchain, which is not installed on this
-> machine, and a Tauri `target/` directory runs 2–4 GB. The TypeScript side
-> typechecks; the Rust side has never been compiled. Treat it as unverified.
+Builds and runs. `cargo build` is clean, the release binary is 4.2 MB (arm64),
+it starts without crashing, and `tauri build` produces a `.dmg`.
 
 ```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-pnpm --filter @bots/desktop dev
+pnpm --filter @bots/desktop dev      # needs a Rust toolchain
+pnpm --filter @bots/desktop build    # → src-tauri/target/release/bundle/
 ```
 
 ## The one problem the browser build never has

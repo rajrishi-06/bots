@@ -5,7 +5,7 @@ use tauri::{
     tray::TrayIconBuilder,
     AppHandle, Manager, WebviewWindow,
 };
-use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, ShortcutState};
 
 /// The desktop buddy.
 ///
@@ -80,14 +80,6 @@ fn main() {
             // the pointer is over the creature; starting the other way round
             // means the window swallows a click before any JS has run.
             pet.set_ignore_cursor_events(true)?;
-
-            // Visible on every desktop/space, like a system utility rather than
-            // a document window.
-            #[cfg(target_os = "macos")]
-            {
-                use tauri::utils::config::WindowEffectsConfig;
-                let _ = WindowEffectsConfig::default();
-            }
 
             let quit = MenuItem::with_id(app, "quit", "Quit Petbot", true, None::<&str>)?;
             let chat = MenuItem::with_id(app, "chat", "Open chat", true, None::<&str>)?;
