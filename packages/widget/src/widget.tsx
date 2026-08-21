@@ -52,7 +52,14 @@ function Pet({ spec, onRig }: { spec: PetSpec; onRig?: (r: PetRig | null) => voi
   return <svg ref={ref} />;
 }
 
-export function Widget({ client, config }: { client: BotClient; config: BotConfig }): JSX.Element {
+export function Widget({
+  client, config, host,
+}: {
+  client: BotClient;
+  config: BotConfig;
+  /** The shadow HOST. Needed to tell our own clicks from the page's — see below. */
+  host: Element;
+}): JSX.Element {
   const [open, setOpen] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
@@ -200,9 +207,18 @@ export function Widget({ client, config }: { client: BotClient; config: BotConfi
       if (e.key === "Escape") setOpen(false);
     };
     const onDown = (e: PointerEvent) => {
-      // composedPath, not contains: the panel lives in a shadow root, so the
-      // event target outside it never satisfies contains() the way you expect.
-      if (e.composedPath().includes(panelRef.current as EventTarget)) return;
+      // Compare against the HOST, not the panel, and not via composedPath().
+      //
+      // The shadow root is CLOSED, and a closed root does not expose its
+      // internals to composedPath() calls from outside it — the path starts at
+      // the host. So `composedPath().includes(panel)` was false for EVERY click,
+      // including clicks on the panel's own buttons, and the panel closed the
+      // instant you tried to use it. It only reproduced on a real page: happy-dom
+      // does not enforce closed-root retargeting.
+      //
+      // Events from inside a shadow tree retarget to the host for outside
+      // listeners, so `target === host` means "this click was ours".
+      if (e.target === host) return;
       setOpen(false);
     };
     window.addEventListener("keydown", onKey);
@@ -211,7 +227,7 @@ export function Widget({ client, config }: { client: BotClient; config: BotConfi
       window.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", onDown, true);
     };
-  }, [open]);
+  }, [open, host]);
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
@@ -306,7 +322,17 @@ export function Widget({ client, config }: { client: BotClient; config: BotConfi
             {turns.map((t, i) => (
               <div class={t.role === "user" ? "row me" : "row"} key={i}>
                 <span class="avatar">
-                  {t.role === "user" ? "you" : <Pet spec={config.pet} />}
+                  {t.role === "user" ? (
+                    // A glyph, not the word "you": at 26px the text overflowed
+                    // the avatar and spilled outside the panel entirely.
+                    <svg viewBox="0 0 16 16" width="13" height="13" fill="none"
+                         stroke="currentColor" stroke-width="1.6" aria-label="You">
+                      <circle cx="8" cy="5.5" r="2.8" />
+                      <path d="M2.5 14c0-3 2.5-4.6 5.5-4.6S13.5 11 13.5 14" stroke-linecap="round" />
+                    </svg>
+                  ) : (
+                    <Pet spec={config.pet} />
+                  )}
                 </span>
                 <div class="bubble">
                   {t.role === "user" ? (

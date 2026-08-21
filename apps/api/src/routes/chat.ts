@@ -90,7 +90,19 @@ async function record(
   }
 }
 
-function sse(reply: FastifyReply): void {
+/**
+ * Open the SSE stream.
+ *
+ * `reply.raw.writeHead` REPLACES the header set — anything Fastify staged on
+ * `reply`, including the CORS headers the onRequest hook adds, is silently
+ * discarded. The preflight still succeeded, so this looked configured; the
+ * actual streamed response arrived with no Access-Control-Allow-Origin and the
+ * browser refused it. curl never noticed, because curl does not enforce CORS.
+ *
+ * The widget is cross-origin by definition, so those headers are re-stated here
+ * rather than assumed.
+ */
+function sse(reply: FastifyReply, origin: string | undefined): void {
   reply.raw.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
@@ -98,6 +110,7 @@ function sse(reply: FastifyReply): void {
     // Proxies buffer text/event-stream by default and the answer arrives in one
     // lump at the end, which reads as a hang.
     "X-Accel-Buffering": "no",
+    ...(origin ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {}),
   });
 }
 
@@ -152,7 +165,7 @@ export function registerChat(app: FastifyInstance, deps: ChatDeps): void {
     // running it here rather than relying on the system prompt to decline.
     const screened = screenInbound(message);
     if (screened.blocked) {
-      sse(reply);
+      sse(reply, origin);
       send(reply, { type: "delta", text: screened.message });
       send(reply, { type: "done", blocked: screened.kind });
       reply.raw.end();
@@ -198,7 +211,7 @@ export function registerChat(app: FastifyInstance, deps: ChatDeps): void {
         threshold: Number(bot.gate_threshold),
       });
 
-      sse(reply);
+      sse(reply, origin);
       if (body.debug) send(reply, { type: "trace", trace, chunks: chunks.map(summarise) });
 
       // Strict mode below the threshold: return the fallback verbatim and never

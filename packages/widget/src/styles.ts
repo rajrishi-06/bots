@@ -78,7 +78,8 @@ export function stylesheet(palette: PetPalette): string {
 .row { display: flex; gap: 9px; align-items: flex-start; }
 .row.me { flex-direction: row-reverse; }
 .avatar { width: 26px; height: 26px; flex: 0 0 26px; border: 1px solid var(--line);
-          background: var(--surface); display: grid; place-items: center; }
+          background: var(--surface); display: grid; place-items: center;
+          overflow: hidden; color: var(--faint); }
 .avatar svg { width: 20px; height: 20px; }
 .bubble { max-width: 82%; padding: 8px 11px; font-size: 13.5px; line-height: 1.55;
           border: 1px solid var(--line); background: var(--surface); color: var(--muted); }

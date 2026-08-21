@@ -49,7 +49,7 @@ export async function mount(opts: MountOptions): Promise<() => void> {
 
   const app = document.createElement("div");
   root.appendChild(app);
-  render(h(Widget, { client, config }), app);
+  render(h(Widget, { client, config, host }), app);
 
   return () => {
     render(null, app);
