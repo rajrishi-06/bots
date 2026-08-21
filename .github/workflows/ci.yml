@@ -50,4 +50,8 @@ jobs:
       - run: pnpm test
       # A fat embeddable is a dead embeddable. 30 kB for the widget, 2 kB for
       # the loader — enforced here, not in a comment somebody stops reading.
-      - run: pnpm --filter @bots/widget --filter @bots/sdk-js run size
+      #
+      # Through turbo, NOT `pnpm --filter … run size`: the size task declares
+      # dependsOn build, and going around turbo skips that, so size-limit
+      # measures a dist/ that was never produced.
+      - run: pnpm exec turbo run size --filter=@bots/widget --filter=@bots/sdk-js
