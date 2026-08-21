@@ -22,9 +22,20 @@ jobs:
           --health-cmd "pg_isready -U bots -d bots"
           --health-interval 3s --health-timeout 3s --health-retries 20
 
+      # The API's rate limiter and quota counter are backed by Redis, and its
+      # tests exercise both against a real one rather than a fake — a mocked
+      # limiter would pass while the sliding window was broken.
+      redis:
+        image: redis:7-alpine
+        ports: ["6380:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+
     env:
       MIGRATION_DATABASE_URL: postgres://bots:bots@localhost:5433/bots
       DATABASE_URL: postgres://bots_app:test@localhost:5433/bots
+      REDIS_URL: redis://localhost:6380
 
     steps:
       - uses: actions/checkout@v4
