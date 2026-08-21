@@ -13,15 +13,84 @@ import {
  * Gemini adapter.
  *
  * Model ids come from env so a rename upstream is a config change, not a
- * deploy. Defaults are the ids verified working against the live API.
+ * deploy. Defaults are ids confirmed present on the live models endpoint and
+ * exercised by `gemini.live.test.ts` — `gemini-3.1-flash` was assumed earlier
+ * and does not exist, which is exactly why that test is worth having.
  */
-const CHAT_MODEL = process.env.GEMINI_CHAT_MODEL ?? "gemini-3.1-flash";
+const CHAT_MODEL = process.env.GEMINI_CHAT_MODEL ?? "gemini-3.7-flash";
 const FAST_MODEL = process.env.GEMINI_FAST_MODEL ?? "gemini-3.1-flash-lite";
 const EMBED_MODEL = process.env.GEMINI_EMBED_MODEL ?? "gemini-embedding-2";
+
+/**
+ * Retry transient upstream failures.
+ *
+ * These models shed load with 503 UNAVAILABLE ("high demand") and 429 under
+ * normal conditions, not just during incidents — it showed up immediately on
+ * first contact. Without this every such blip becomes a failed user message or
+ * a failed ingest batch. Only retries statuses that are actually transient: a
+ * 400 or 404 is a bug and retrying it just delays the error.
+ */
+const RETRY_STATUSES = [429, 500, 502, 503, 504];
+const MAX_ATTEMPTS = 4;
+
+function isTransient(err: unknown): boolean {
+  const text = err instanceof Error ? err.message : String(err);
+  return RETRY_STATUSES.some((s) => text.includes(String(s)));
+}
+
+async function withRetry<T>(label: string, fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  let last: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      last = err;
+      if (signal?.aborted || attempt === MAX_ATTEMPTS || !isTransient(err)) break;
+      // Exponential backoff with jitter, so a fleet of workers hitting the same
+      // overloaded model does not retry in lockstep and re-create the spike.
+      const delay = 300 * 2 ** (attempt - 1) * (0.5 + Math.random());
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw new Error(
+    `${label} failed after ${MAX_ATTEMPTS} attempts: ${last instanceof Error ? last.message : String(last)}`,
+    { cause: last },
+  );
+}
 
 /** Gemini's own cap on inputs per embedContent batch. */
 const EMBED_BATCH = 100;
 
+/**
+ * Headroom added on top of the caller's answer budget for thinking tokens.
+ *
+ * MEASURED: `gemini-3.7-flash` IGNORES `thinkingConfig.thinkingBudget: 0` and
+ * spends ~120-140 tokens thinking anyway — and those tokens come out of
+ * `maxOutputTokens`. At maxOutputTokens=128 the model burned 119 on thinking,
+ * left 5 for the answer, and returned "EU refunds take 1" — truncated mid-word,
+ * with finishReason STOP and no error of any kind.
+ *
+ * Callers reason about how long an ANSWER should be. The API counts thinking
+ * against the same number. This closes that gap so a caller asking for 1024
+ * tokens of answer gets 1024 tokens of answer. `gemini-3.1-flash-lite` does
+ * honour a zero budget (measured 0 thinking tokens), so this is pure headroom
+ * there and costs nothing.
+ */
+const THINKING_HEADROOM = 512;
+
+/**
+ * MEASURED, and contrary to what the API's acceptance of the parameter implies:
+ * `gemini-embedding-2` currently IGNORES `taskType`. Embedding the same string
+ * as RETRIEVAL_DOCUMENT, as RETRIEVAL_QUERY, as SEMANTIC_SIMILARITY, and with
+ * the field omitted entirely all return vectors with pairwise cosine 0.9999997
+ * — identical to float precision. The request 200s, so nothing surfaces.
+ *
+ * Asymmetric embedding is therefore NOT in effect on this provider, and the
+ * retrieval pipeline is running symmetric whether it means to or not. The field
+ * is still sent: it is free, it is correct on providers that honour it (NeMo's
+ * `input_type`, Cohere's), and `gemini.live.test.ts` pins the current behaviour
+ * so we find out if it ever starts working.
+ */
 const TASK_TYPE: Record<EmbedKind, string> = {
   document: "RETRIEVAL_DOCUMENT",
   query: "RETRIEVAL_QUERY",
@@ -53,7 +122,7 @@ export class GeminiProvider implements ModelProvider {
     const out: number[][] = [];
     for (let i = 0; i < texts.length; i += EMBED_BATCH) {
       const batch = texts.slice(i, i + EMBED_BATCH);
-      const res = await this.#client.models.embedContent({
+      const res = await withRetry("embed", () => this.#client.models.embedContent({
         model: EMBED_MODEL,
         contents: batch.map((t) => ({ parts: [{ text: t }] })),
         config: {
@@ -62,7 +131,7 @@ export class GeminiProvider implements ModelProvider {
           // returns these already unit-normalised, which the ip_ops index relies on.
           outputDimensionality: EMBED_DIM,
         },
-      });
+      }));
       const vectors = res.embeddings ?? [];
       if (vectors.length !== batch.length) {
         throw new Error(`Embedding count mismatch: sent ${batch.length}, got ${vectors.length}`);
@@ -79,26 +148,43 @@ export class GeminiProvider implements ModelProvider {
   }
 
   async *generateStream(opts: GenerateOptions): AsyncIterable<string> {
-    const stream = await this.#client.models.generateContentStream({
+    // Retry wraps only stream ESTABLISHMENT. Once deltas are flowing a failure
+    // is not safely retryable — the user has already seen half an answer.
+    const stream = await withRetry("generateStream", () => this.#client.models.generateContentStream({
       model: CHAT_MODEL,
       contents: toContents(opts.messages),
       config: {
         systemInstruction: opts.system,
-        maxOutputTokens: opts.maxOutputTokens ?? 1024,
-        // Budget goes to the visible answer, not to hidden reasoning. Grounded
-        // answers over retrieved context do not need a scratchpad.
+        // Answer budget PLUS thinking headroom — see THINKING_HEADROOM. Asking
+        // for exactly the answer length silently truncates on thinking models.
+        maxOutputTokens: (opts.maxOutputTokens ?? 1024) + THINKING_HEADROOM,
+        // Honoured by flash-lite, ignored by 3.7-flash. Sent anyway: where it
+        // works it saves the tokens, and where it does not the headroom covers it.
         thinkingConfig: { thinkingBudget: 0 },
         abortSignal: opts.signal,
       },
-    });
+    }), opts.signal);
+
+    let produced = false;
     for await (const chunk of stream) {
       const text = chunk.text;
-      if (text) yield text;
+      if (text) {
+        produced = true;
+        yield text;
+      }
+    }
+    // A stream that completes having emitted only thinking tokens is the
+    // starvation case above. Fail loudly — silently returning "" renders as an
+    // empty assistant bubble the visitor cannot distinguish from a broken bot.
+    if (!produced) {
+      throw new Error(
+        "Model produced no visible text (thinking tokens may have consumed the output budget).",
+      );
     }
   }
 
   async generateJson<T>(opts: GenerateJsonOptions<T>): Promise<T> {
-    const res = await this.#client.models.generateContent({
+    const res = await withRetry("generateJson", () => this.#client.models.generateContent({
       model: FAST_MODEL,
       contents: [{ role: "user", parts: [{ text: opts.prompt }] }],
       config: {
@@ -107,7 +193,7 @@ export class GeminiProvider implements ModelProvider {
         responseSchema: opts.schema as never,
         abortSignal: opts.signal,
       },
-    });
+    }), opts.signal);
     const text = res.text;
     if (!text) throw new Error("Model returned no JSON.");
     let raw: unknown;
@@ -156,7 +242,7 @@ export class GeminiReranker implements Reranker {
       .map((c, i) => `<passage id="${i}">\n${c.slice(0, this.#maxChars)}\n</passage>`)
       .join("\n\n");
 
-    const res = await this.#client.models.generateContent({
+    const res = await withRetry("rerank", () => this.#client.models.generateContent({
       model: FAST_MODEL,
       contents: [
         { role: "user", parts: [{ text: `QUERY:\n${query}\n\nPASSAGES:\n${numbered}` }] },
@@ -187,7 +273,7 @@ export class GeminiReranker implements Reranker {
         },
         abortSignal: opts.signal,
       },
-    });
+    }), opts.signal);
 
     const text = res.text;
     if (!text) throw new Error("Reranker returned no JSON.");
