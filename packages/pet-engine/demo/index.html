@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pet engine — gallery</title>
+    <style>
+      /* Terrarium: achromatic chrome, the pets carry all the colour. */
+      :root { --bg:#F0F2EF; --surface:#E5E8E3; --ink:#131614; --muted:#454A46; --faint:#5D635E; --overlay:0,0,0; }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg:#0E100F; --surface:#171A18; --ink:#E9ECE8; --muted:#AFB5B0; --faint:#848B86; --overlay:255,255,255; }
+      }
+      * { box-sizing: border-box; }
+      body { margin:0; background:var(--bg); color:var(--ink);
+             font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+      .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+      h1 { font-size: 1.4rem; font-weight: 600; margin: 0 0 4px; }
+      .sub { font-family: ui-monospace, "IBM Plex Mono", monospace; font-size: 0.6875rem;
+             letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); margin: 0 0 28px; }
+      .rule { height:1px; background: rgb(var(--overlay)/0.28); margin: 0 0 28px; }
+      .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(190px,1fr)); gap:1px;
+              background: rgb(var(--overlay)/0.14); border:1px solid rgb(var(--overlay)/0.14); }
+      .cell { background: var(--bg); padding:20px 16px; display:flex; flex-direction:column;
+              align-items:center; gap:10px; cursor:grab; }
+      .cell:active { cursor:grabbing; }
+      .cell:hover { background: var(--surface); }
+      .cell svg { width:110px; height:110px; }
+      .name { font-family: ui-monospace, monospace; font-size:0.8125rem; color:var(--ink); }
+      .meta { font-family: ui-monospace, monospace; font-size:0.6875rem; color:var(--faint);
+              text-align:center; line-height:1.5; }
+      .swatch { display:flex; gap:2px; }
+      .swatch i { width:12px; height:6px; display:block; }
+      .bar { display:flex; gap:8px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
+      button { font-family: ui-monospace, monospace; font-size:0.6875rem; text-transform:uppercase;
+               letter-spacing:0.08em; padding:7px 12px; border:1px solid rgb(var(--overlay)/0.28);
+               background:transparent; color:var(--ink); border-radius:2px; cursor:pointer; }
+      button:hover { background: var(--surface); }
+      button:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+      .grounds { display:flex; gap:1px; margin-top:28px; border:1px solid rgb(var(--overlay)/0.14); }
+      .ground { flex:1; padding:24px; display:flex; justify-content:center; gap:16px; flex-wrap:wrap; }
+      .ground svg { width:76px; height:76px; }
+      .g-white { background:#FFFFFF; } .g-black { background:#0B0B0C; }
+      .label { font-family:ui-monospace,monospace; font-size:0.625rem; letter-spacing:0.14em;
+               text-transform:uppercase; color:var(--faint); margin:0 0 10px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Pet engine</h1>
+      <p class="sub">Live rigs · not screenshots · drag one</p>
+      <div class="rule"></div>
+      <div class="bar">
+        <button id="swap">Hot-swap all</button>
+        <button id="shove">Shove</button>
+        <button id="reduce">Toggle reduced motion</button>
+        <span class="meta" id="status"></span>
+      </div>
+      <div class="grid" id="grid"></div>
+
+      <div style="margin-top:36px">
+        <p class="label">Contrast gate — the same pets on both grounds</p>
+        <div class="grounds">
+          <div class="ground g-white" id="on-white"></div>
+          <div class="ground g-black" id="on-black"></div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

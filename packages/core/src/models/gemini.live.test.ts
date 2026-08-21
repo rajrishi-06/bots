@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { EMBED_DIM } from "./provider.js";
 import { GeminiProvider, GeminiReranker } from "./gemini.js";
 
@@ -19,7 +19,13 @@ import { GeminiProvider, GeminiReranker } from "./gemini.js";
 const live = describe.skipIf(!process.env.GEMINI_API_KEY);
 
 live("Gemini live contract", () => {
-  const provider = new GeminiProvider();
+  // Constructed in beforeAll, NOT in the describe body: vitest still executes a
+  // skipped suite's callback during collection, so building a provider there
+  // throws "GEMINI_API_KEY is not set" for everyone without a key — including CI.
+  let provider: GeminiProvider;
+  beforeAll(() => {
+    provider = new GeminiProvider();
+  });
 
   it("embeds at the indexed width, unit-normalised", { timeout: 60_000 }, async () => {
     const [v] = await provider.embed(["EU customers may request a refund within 14 days."], "document");

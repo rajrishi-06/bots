@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { GeminiProvider } from "../models/gemini.js";
 import { generatePet } from "./generate.js";
 import { validatePetPalette } from "./palette.js";
@@ -15,7 +15,11 @@ import { petSpecSchema } from "./spec.js";
 const live = describe.skipIf(!process.env.GEMINI_API_KEY);
 
 live("pet generation (live)", () => {
-  const provider = new GeminiProvider();
+  // See the note in models/gemini.live.test.ts — a skipped suite's body still runs.
+  let provider: GeminiProvider;
+  beforeAll(() => {
+    provider = new GeminiProvider();
+  });
 
   it("turns a prompt into a valid, legible pet", { timeout: 120_000 }, async () => {
     const { spec, attempts } = await generatePet(provider, { prompt: "a sleepy lavender axolotl" });

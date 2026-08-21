@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pet-gallery",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@bots/pet-engine", "dev"],
+      "port": 5174
+    }
+  ]
+}
