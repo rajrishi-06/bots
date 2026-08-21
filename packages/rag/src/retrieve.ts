@@ -6,7 +6,18 @@ import {
   type ModelProvider,
   type Reranker,
 } from "@bots/core";
-import type { Sql } from "postgres";
+import type { Sql, TransactionSql } from "postgres";
+
+/**
+ * Anything that can run a query.
+ *
+ * Retrieval must work inside a transaction, because the API opens one per
+ * request to `SET LOCAL app.bot_id` for RLS — and postgres.js types a
+ * transaction as a narrower thing than a pool, not a subtype of it. This
+ * pipeline only ever issues queries, so the pool-lifecycle half of `Sql` is not
+ * part of what it needs.
+ */
+export type Queryable = Sql | TransactionSql;
 
 /**
  * The query-side pipeline.
@@ -64,7 +75,7 @@ export interface Stages {
 const ALL_STAGES: Required<Stages> = { dense: true, bm25: true, rerank: true, rewrite: true };
 
 export interface RetrieveInput {
-  sql: Sql;
+  sql: Queryable;
   provider: ModelProvider;
   reranker: Reranker;
   botId: string;
@@ -134,7 +145,7 @@ interface Row {
 
 /** Dense retrieval. `<#>` is pgvector's inner-product operator (negated), which
  *  the HNSW index is built for; valid because embeddings are unit-normalised. */
-async function denseSearch(sql: Sql, botId: string, embedding: number[], k: number): Promise<Row[]> {
+async function denseSearch(sql: Queryable, botId: string, embedding: number[], k: number): Promise<Row[]> {
   const literal = `[${embedding.join(",")}]`;
   return sql<Row[]>`
     SELECT id, document_id, heading_path, content
@@ -158,7 +169,7 @@ async function denseSearch(sql: Sql, botId: string, embedding: number[], k: numb
  * OR-ing recovers the documents; `ts_rank_cd` does the discriminating, since it
  * weights term frequency and proximity and rewards chunks matching more terms.
  */
-async function bm25Search(sql: Sql, botId: string, query: string, k: number): Promise<Row[]> {
+async function bm25Search(sql: Queryable, botId: string, query: string, k: number): Promise<Row[]> {
   // Lexemes come from to_tsvector so they are stemmed and stop-worded exactly
   // like the indexed column — building the query string by hand would not match.
   return sql<Row[]>`

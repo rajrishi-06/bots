@@ -68,7 +68,12 @@ describe("tenant isolation", () => {
     // FORCE ROW LEVEL SECURITY binds the table owner, but nothing binds a
     // superuser. The default docker/RDS master user is one. If the API ever
     // connects with it, every policy in 0001 is inert.
-    const rows = await owner`SELECT bot_id FROM chunks`;
+    //
+    // Scoped to this test's two bots rather than counting the whole table:
+    // suites in other packages run concurrently against the same database, and
+    // the claim under test is "sees BOTH tenants", not "the database is empty".
+    // An RLS-bound role with no scope set returns 0 here.
+    const rows = await owner`SELECT bot_id FROM chunks WHERE bot_id IN (${botA}, ${botB})`;
     expect(rows.length).toBe(2);
 
     const [role] = await owner`SELECT usesuper FROM pg_user WHERE usename = current_user`;
@@ -149,7 +154,8 @@ describe("exactly one active pet per bot", () => {
 
   it("lets a DIFFERENT bot have its own active pet", async () => {
     await owner`INSERT INTO pets (bot_id, name, spec, is_active) VALUES (${botB}, 'b-active', ${owner.json(spec)}, true)`;
-    const rows = await owner`SELECT count(*)::int AS n FROM pets WHERE is_active`;
+    const rows = await owner`
+      SELECT count(*)::int AS n FROM pets WHERE is_active AND bot_id IN (${botA}, ${botB})`;
     expect(rows[0]!.n).toBe(2);
   });
 });
