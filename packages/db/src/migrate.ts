@@ -12,8 +12,14 @@ import { dirname, join } from "node:path";
  * a bootstrap concern, not a schema change: it must exist before the first
  * migration's `vector(1024)` column can parse, and it is idempotent.
  */
-export async function runMigrations(url = process.env.DATABASE_URL): Promise<void> {
-  if (!url) throw new Error("DATABASE_URL is not set.");
+export async function runMigrations(
+  // MIGRATION_DATABASE_URL first, and it matters: DATABASE_URL points at
+  // `bots_app`, which migrations are the thing that CREATES. Running them as the
+  // application user is a chicken-and-egg that fails with a bare
+  // "password authentication failed" and no hint about why.
+  url = process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL,
+): Promise<void> {
+  if (!url) throw new Error("Set MIGRATION_DATABASE_URL (the privileged connection).");
   // max: 1 — migrations must run on a single connection, in order.
   const client = postgres(url, { max: 1 });
   try {

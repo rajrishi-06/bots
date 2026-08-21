@@ -11,8 +11,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * Requires the local stack: `docker compose up -d && pnpm --filter @bots/db migrate`.
  */
 
-const OWNER_URL = process.env.DATABASE_URL ?? "postgres://bots:bots@localhost:5433/bots";
-const APP_URL = OWNER_URL.replace("//bots:bots@", "//bots_app:test@");
+// The owner connection is the PRIVILEGED one — it grants bots_app its password
+// and seeds fixtures. DATABASE_URL is bots_app itself, which can do neither.
+const OWNER_URL = process.env.MIGRATION_DATABASE_URL ?? "postgres://bots:bots@localhost:5433/bots";
+const APP_URL = process.env.DATABASE_URL ?? "postgres://bots_app:test@localhost:5433/bots";
 
 let owner: postgres.Sql;
 let app: postgres.Sql;
