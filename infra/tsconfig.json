@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "verbatimModuleSyntax": false,
+    "lib": ["ES2023"]
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["cdk.out"]
+}

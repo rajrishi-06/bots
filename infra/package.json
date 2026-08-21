@@ -1,0 +1,22 @@
+{
+  "name": "@bots/infra",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.175.1",
+    "constructs": "^10.4.2"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.175.0",
+    "tsx": "^4.19.2",
+    "typescript": "5.7.3",
+    "vitest": "3.0.5"
+  }
+}

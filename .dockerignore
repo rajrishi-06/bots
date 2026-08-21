@@ -1,0 +1,22 @@
+# The CDK image assets use the REPO ROOT as build context (pnpm workspace
+# symlinks cannot be followed from a per-app context). Without this file the
+# staging copy recurses: cdk.out contains the asset, the asset contains cdk.out.
+infra/cdk.out
+**/cdk.out
+
+node_modules
+**/node_modules
+.git
+.github
+**/dist
+**/.next
+**/.turbo
+**/demo-dist
+**/coverage
+**/*.tsbuildinfo
+.env
+.env.*
+!.env.example
+**/.DS_Store
+*.md
+!README.md
