@@ -66,23 +66,23 @@ export function RetrievalPanel({ trace, chunks, threshold }: RetrievalPanelProps
         />
       </div>
 
-      <p className="reason u-data">{trace.gate.reason}</p>
+      <p className="reason mono">{trace.gate.reason}</p>
 
       {chunks.length === 0 ? (
-        <p className="empty u-data">Retrieval returned nothing for this query.</p>
+        <p className="empty mono">Retrieval returned nothing for this query.</p>
       ) : (
         <div className="bars">
           {/* The threshold, drawn where it actually falls in the score column. */}
           <div className="threshold" style={{ left: `${threshold * 100}%` }} aria-hidden>
-            <span className="u-label">gate {threshold.toFixed(2)}</span>
+            <span className="label">gate {threshold.toFixed(2)}</span>
           </div>
 
           {chunks.map((c, i) => (
             <div className={`chunk${c.score < threshold ? " under" : ""}`} key={c.id}>
               <div className="head">
-                <span className="u-data ord">{String(i + 1).padStart(2, "0")}</span>
-                <span className="u-data path">{c.headingPath || "—"}</span>
-                <span className="u-data ranks">{rankLabel(c.ranks)}</span>
+                <span className="mono ord">{String(i + 1).padStart(2, "0")}</span>
+                <span className="mono path">{c.headingPath || "—"}</span>
+                <span className="mono ranks">{rankLabel(c.ranks)}</span>
               </div>
 
               <div className="track" title={`fused ${c.fusedScore.toFixed(4)} → reranked ${c.score.toFixed(3)}`}>
@@ -90,7 +90,7 @@ export function RetrievalPanel({ trace, chunks, threshold }: RetrievalPanelProps
                 <div className="bar final" style={{ width: `${Math.min(100, c.score * 100)}%` }} />
               </div>
 
-              <div className="scores u-data">
+              <div className="scores mono">
                 <span className="pre">pre {c.fusedScore.toFixed(4)}</span>
                 <span className="post">post {c.score.toFixed(3)}</span>
               </div>
@@ -101,7 +101,7 @@ export function RetrievalPanel({ trace, chunks, threshold }: RetrievalPanelProps
         </div>
       )}
 
-      <div className="timings u-data">
+      <div className="timings mono">
         {Object.entries(trace.timings).map(([stage, ms]) => (
           <span key={stage}>
             {stage} <strong>{ms}ms</strong>
@@ -114,21 +114,21 @@ export function RetrievalPanel({ trace, chunks, threshold }: RetrievalPanelProps
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
           gap: 1px;
-          background: var(--line);
-          border: 1px solid var(--line);
+          background: var(--border);
+          border: 1px solid var(--border);
           margin-bottom: 12px;
         }
         .reason {
-          color: var(--faint);
+          color: var(--fg-lighter);
           margin: 0 0 20px;
         }
         .empty {
-          color: var(--faint);
+          color: var(--fg-lighter);
           padding: 20px 0;
         }
         .bars {
           position: relative;
-          border-top: 1px solid var(--line-strong);
+          border-top: 1px solid var(--border-strong);
           padding-top: 16px;
         }
         /* The drawn gate line. Full height, so a chunk falling under it is a
@@ -138,7 +138,7 @@ export function RetrievalPanel({ trace, chunks, threshold }: RetrievalPanelProps
           top: 0;
           bottom: 28px;
           width: 1px;
-          background: var(--ink);
+          background: var(--fg);
           z-index: 1;
           pointer-events: none;
         }
@@ -152,7 +152,7 @@ export function RetrievalPanel({ trace, chunks, threshold }: RetrievalPanelProps
         }
         .chunk {
           padding: 14px 0;
-          border-bottom: 1px solid var(--line);
+          border-bottom: 1px solid var(--border);
         }
         .chunk.under { opacity: 0.55; }
         .head {
@@ -161,9 +161,9 @@ export function RetrievalPanel({ trace, chunks, threshold }: RetrievalPanelProps
           align-items: baseline;
           margin-bottom: 6px;
         }
-        .ord { color: var(--faint); }
-        .path { color: var(--ink); flex: 1; }
-        .ranks { color: var(--faint); font-size: 0.6875rem; }
+        .ord { color: var(--fg-lighter); }
+        .path { color: var(--fg); flex: 1; }
+        .ranks { color: var(--fg-lighter); font-size: 0.6875rem; }
         .track {
           position: relative;
           height: 14px;
@@ -178,25 +178,25 @@ export function RetrievalPanel({ trace, chunks, threshold }: RetrievalPanelProps
            as a single gesture rather than two unrelated measurements. */
         .bar.fused {
           top: 0;
-          background: rgba(var(--overlay), 0.28);
+          background: color-mix(in srgb, var(--fg) 28%, transparent);
         }
         .bar.final {
           top: 8px;
-          background: var(--ink);
+          background: var(--fg);
         }
         .scores {
           display: flex;
           gap: 16px;
           margin-top: 4px;
-          color: var(--faint);
+          color: var(--fg-lighter);
           font-size: 0.6875rem;
         }
-        .post { color: var(--ink); }
+        .post { color: var(--fg); }
         .preview {
           margin: 8px 0 0;
           font-size: 0.8125rem;
           line-height: 1.55;
-          color: var(--muted);
+          color: var(--fg-light);
           display: -webkit-box;
           -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
@@ -207,10 +207,10 @@ export function RetrievalPanel({ trace, chunks, threshold }: RetrievalPanelProps
           flex-wrap: wrap;
           gap: 18px;
           margin-top: 16px;
-          color: var(--faint);
+          color: var(--fg-lighter);
         }
         .timings strong {
-          color: var(--ink);
+          color: var(--fg);
           font-weight: 500;
         }
       `}</style>
@@ -223,8 +223,8 @@ function Stat({
 }: { label: string; value: string; tone?: "ok" | "warn" | "err"; wide?: boolean }) {
   return (
     <div className="stat" style={wide ? { gridColumn: "1 / -1" } : undefined}>
-      <span className="u-label">{label}</span>
-      <span className={tone ? `u-data v ${tone}` : "u-data v"}>{value}</span>
+      <span className="label">{label}</span>
+      <span className={tone ? `mono v ${tone}` : "mono v"}>{value}</span>
       <style jsx>{`
         .stat {
           background: var(--bg);
@@ -235,7 +235,7 @@ function Stat({
           min-width: 0;
         }
         .v {
-          color: var(--ink);
+          color: var(--fg);
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;

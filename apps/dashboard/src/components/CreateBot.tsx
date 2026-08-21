@@ -40,7 +40,7 @@ export function CreateBot() {
       <button className="btn primary" disabled={busy || !name.trim()}>
         {busy ? "Creating" : "Create bot"}
       </button>
-      {error && <span className="status err">{error}</span>}
+      {error && <span className="badge err">{error}</span>}
       <style jsx>{`
         .create { display: flex; gap: 8px; align-items: center; margin-bottom: 24px; }
         .create input { max-width: 280px; }

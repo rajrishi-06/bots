@@ -82,7 +82,7 @@ export function IngestForm({ botId }: { botId: string }) {
         <button className="btn primary" disabled={busy}>
           {busy ? "Working" : tab === "snippet" ? "Index now" : "Queue crawl"}
         </button>
-        {note && <span className={`status ${note.tone}`}>{note.text}</span>}
+        {note && <span className={`badge ${note.tone}`}>{note.text}</span>}
       </div>
 
       <style jsx>{`
@@ -91,9 +91,9 @@ export function IngestForm({ botId }: { botId: string }) {
         .switch button {
           background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer;
           font-family: var(--mono); font-size: 0.6875rem; letter-spacing: 0.14em;
-          text-transform: uppercase; color: var(--faint); padding: 4px 0; margin-right: 12px;
+          text-transform: uppercase; color: var(--fg-lighter); padding: 4px 0; margin-right: 12px;
         }
-        .switch button[data-active="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+        .switch button[data-active="true"] { color: var(--fg); border-bottom-color: var(--fg); }
         .row { display: flex; align-items: center; gap: 12px; }
       `}</style>
     </form>

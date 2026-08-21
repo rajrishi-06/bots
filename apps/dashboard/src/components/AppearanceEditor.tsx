@@ -60,7 +60,7 @@ export function AppearanceEditor({
     <div>
       {(Object.keys(OPTIONS) as (keyof typeof OPTIONS)[]).map((key) => (
         <div className="field" key={key}>
-          <span className="u-label">{key}</span>
+          <span className="label">{key}</span>
           <div className="choices">
             {OPTIONS[key].map(([value, label]) => (
               <button
@@ -77,7 +77,7 @@ export function AppearanceEditor({
       ))}
 
       <div className="field">
-        <span className="u-label">accent</span>
+        <span className="label">accent</span>
         <div className="choices">
           <button type="button" data-active={a.accent === "pet"} onClick={() => setA({ ...a, accent: "pet" })}>
             From the pet
@@ -92,19 +92,19 @@ export function AppearanceEditor({
       </div>
 
       <div className="field">
-        <span className="u-label">launcher</span>
+        <span className="label">launcher</span>
         <div className="choices">
           <input
             type="range" min={44} max={96} step={2} value={a.launcherSize}
             onChange={(e) => setA({ ...a, launcherSize: Number(e.target.value) })}
             style={{ width: 180 }}
           />
-          <span className="u-data">{a.launcherSize}px</span>
+          <span className="mono">{a.launcherSize}px</span>
         </div>
       </div>
 
       <div className="field">
-        <span className="u-label">feedback</span>
+        <span className="label">feedback</span>
         <div className="choices">
           <button type="button" data-active={a.feedback} onClick={() => setA({ ...a, feedback: true })}>
             Show thumbs
@@ -116,8 +116,8 @@ export function AppearanceEditor({
       </div>
 
       <h2 style={{ marginTop: 28 }}>Quick actions</h2>
-      <p className="u-data" style={{ color: "var(--faint)", margin: "0 0 12px" }}>
-        Up to four, shown under the greeting. Links must be <strong style={{ color: "var(--ink)" }}>https</strong> —
+      <p className="mono" style={{ color: "var(--fg-lighter)", margin: "0 0 12px" }}>
+        Up to four, shown under the greeting. Links must be <strong style={{ color: "var(--fg)" }}>https</strong> —
         the widget renders these into a page you do not own.
       </p>
 
@@ -155,21 +155,21 @@ export function AppearanceEditor({
         <button className="btn primary" onClick={() => void save()} disabled={saving}>
           {saving ? "Saving" : "Save"}
         </button>
-        {note && <span className={`status ${note.tone}`}>{note.text}</span>}
+        {note && <span className={`badge ${note.tone}`}>{note.text}</span>}
       </div>
 
       <style jsx>{`
         .field { display: flex; align-items: center; gap: 16px; padding: 10px 0;
-                 border-bottom: 1px solid var(--line); }
-        .field > :global(.u-label) { width: 96px; flex: 0 0 96px; }
+                 border-bottom: 1px solid var(--border); }
+        .field > :global(.label) { width: 96px; flex: 0 0 96px; }
         .choices { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
         .choices button {
-          border: 1px solid var(--line); background: transparent; color: var(--muted);
+          border: 1px solid var(--border); background: transparent; color: var(--fg-light);
           font-size: 0.8125rem; padding: 5px 11px; border-radius: 2px; cursor: pointer;
         }
-        .choices button[data-active="true"] { border-color: var(--ink); color: var(--ink);
+        .choices button[data-active="true"] { border-color: var(--fg); color: var(--fg);
                                               background: var(--surface); }
-        .choices input[type="color"] { width: 36px; height: 28px; padding: 0; border: 1px solid var(--line); }
+        .choices input[type="color"] { width: 36px; height: 28px; padding: 0; border: 1px solid var(--border); }
         .action-row { display: grid; grid-template-columns: 90px 1fr 1.6fr auto; gap: 8px;
                       margin-bottom: 8px; align-items: center; }
       `}</style>

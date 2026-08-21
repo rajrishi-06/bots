@@ -54,12 +54,12 @@ export function Playground({
         </button>
       </form>
 
-      <p className="u-data hint">
+      <p className="mono hint">
         grounding <strong>{mode}</strong> · gate threshold <strong>{threshold.toFixed(2)}</strong>
         {mode === "strict" && " · a query under the line returns the fallback and never reaches the model"}
       </p>
 
-      {error && <p className="status err" style={{ margin: "16px 0" }}>{error}</p>}
+      {error && <p className="badge err" style={{ margin: "16px 0" }}>{error}</p>}
 
       {result && (
         <RetrievalPanel trace={result.trace} chunks={result.chunks} threshold={threshold} />
@@ -68,8 +68,8 @@ export function Playground({
       <style jsx>{`
         .ask { display: flex; gap: 8px; margin-bottom: 8px; }
         .ask input { flex: 1; }
-        .hint { color: var(--faint); margin: 0 0 24px; }
-        .hint strong { color: var(--ink); font-weight: 500; }
+        .hint { color: var(--fg-lighter); margin: 0 0 24px; }
+        .hint strong { color: var(--fg); font-weight: 500; }
       `}</style>
     </div>
   );

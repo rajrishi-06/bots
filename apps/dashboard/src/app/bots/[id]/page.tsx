@@ -1,4 +1,4 @@
-import { Section } from "@/components/Shell";
+import { Card } from "@/components/Shell";
 import { getBot } from "@/lib/data";
 import { notFound } from "next/navigation";
 
@@ -9,35 +9,58 @@ export default async function OverviewPage({ params }: { params: Promise<{ id: s
   const bot = await getBot(id);
   if (!bot) notFound();
 
-  const rows: [string, string][] = [
-    ["documents", String(bot.documents)],
-    ["chunks", String(bot.chunks)],
-    ["active pet", bot.activePetName ?? "none"],
-    ["grounding", bot.groundingMode],
-    ["gate threshold", bot.gateThreshold.toFixed(2)],
-    ["allowed origins", bot.allowedOrigins.length ? bot.allowedOrigins.join(", ") : "any (unrestricted)"],
-  ];
-
   return (
-    <Section n="01" label="Overview" title="Characteristics">
-      <table>
-        <tbody>
-          {rows.map(([k, v]) => (
-            <tr key={k}>
-              <td className="u-label" style={{ width: 200 }}>{k}</td>
-              <td className="u-data">{v}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <>
+      <div className="stat-row">
+        <Stat label="Documents" value={String(bot.documents)} />
+        <Stat label="Chunks" value={String(bot.chunks)} />
+        <Stat label="Active pet" value={bot.activePetName ?? "none"} />
+        <Stat label="Gate threshold" value={bot.gateThreshold.toFixed(2)} />
+      </div>
 
-      <h2 style={{ marginTop: 28 }}>Persona</h2>
-      <p style={{ color: "var(--muted)", fontSize: "0.9375rem" }}>
-        {bot.systemPrompt || <span className="empty-note">No persona set.</span>}
-      </p>
+      <Card title="Configuration" flush>
+        <div className="table-wrap">
+          <table>
+            <tbody>
+              <Row k="Public key" v={<span className="mono">{bot.publicKey}</span>} />
+              <Row k="Grounding" v={<span className={`badge ${bot.groundingMode === "strict" ? "ok" : "warn"}`}>{bot.groundingMode}</span>} />
+              <Row
+                k="Allowed origins"
+                v={
+                  bot.allowedOrigins.length
+                    ? bot.allowedOrigins.join(", ")
+                    : <span className="badge warn">any origin</span>
+                }
+              />
+              <Row k="Fallback" v={<span className="muted">{bot.fallbackMessage}</span>} />
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
-      <h2 style={{ marginTop: 20 }}>Fallback</h2>
-      <p className="u-data" style={{ color: "var(--muted)" }}>{bot.fallbackMessage}</p>
-    </Section>
+      <Card title="Persona" description="Prepended to every answer this bot gives.">
+        <p className={bot.systemPrompt ? "" : "muted"}>
+          {bot.systemPrompt || "No persona set."}
+        </p>
+      </Card>
+    </>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="stat">
+      <span className="label">{label}</span>
+      <span className="value">{value}</span>
+    </div>
+  );
+}
+
+function Row({ k, v }: { k: string; v: React.ReactNode }) {
+  return (
+    <tr>
+      <td className="label" style={{ width: 180 }}>{k}</td>
+      <td>{v}</td>
+    </tr>
   );
 }

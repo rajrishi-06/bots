@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CreateBot } from "@/components/CreateBot";
-import { Section, Shell } from "@/components/Shell";
+import { Card, Shell } from "@/components/Shell";
 import { listBots } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -9,60 +9,66 @@ export default async function Home() {
   const bots = await listBots();
 
   return (
-    <Shell>
-      <Section n="01" label="Bots" title="Your bots">
-        <CreateBot />
-
+    <Shell crumbs={<strong>All bots</strong>} actions={<CreateBot />}>
+      <Card
+        title="Bots"
+        description={bots.length === 1 ? "1 bot" : `${bots.length} bots`}
+        flush
+      >
         {bots.length === 0 ? (
-          <p className="empty-note">
-            No bots yet. Create one, design a pet, and feed it some documents.
-          </p>
+          <div className="empty">
+            <strong>No bots yet</strong>
+            Create one, design a pet, and feed it some documents.
+          </div>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>№</th>
-                <th>Name</th>
-                <th>Pet</th>
-                <th>Grounding</th>
-                <th className="num">Docs</th>
-                <th className="num">Chunks</th>
-                <th>Embed</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bots.map((b, i) => (
-                <tr key={b.id}>
-                  <td className="num" style={{ color: "var(--faint)" }}>
-                    {String(i + 1).padStart(2, "0")}
-                  </td>
-                  <td>
-                    <Link href={`/bots/${b.id}`} style={{ color: "var(--ink)" }}>
-                      {b.name}
-                    </Link>
-                  </td>
-                  <td className="u-data">{b.activePetName ?? "—"}</td>
-                  <td>
-                    {/* A bot outside strict mode carries a permanent badge, not
-                        a dismissible toast — see DESIGN.md and the grounding
-                        mode acknowledgement. */}
-                    <span className={`status ${b.groundingMode === "strict" ? "ok" : "warn"}`}>
-                      {b.groundingMode}
-                    </span>
-                  </td>
-                  <td className="num">{b.documents}</td>
-                  <td className="num">{b.chunks}</td>
-                  <td>
-                    <span className={`status ${b.allowedOrigins.length === 0 ? "warn" : "ok"}`}>
-                      {b.allowedOrigins.length === 0 ? "any origin" : `${b.allowedOrigins.length} allowed`}
-                    </span>
-                  </td>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Pet</th>
+                  <th>Grounding</th>
+                  <th>Embed</th>
+                  <th className="num">Docs</th>
+                  <th className="num">Chunks</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {bots.map((b) => (
+                  <tr key={b.id}>
+                    <td>
+                      <Link href={`/bots/${b.id}`} className="row-link">
+                        {b.name}
+                      </Link>
+                      <div className="mono" style={{ color: "var(--fg-lighter)", fontSize: 12 }}>
+                        {b.publicKey}
+                      </div>
+                    </td>
+                    <td className="muted">{b.activePetName ?? "—"}</td>
+                    <td>
+                      {/* A bot outside strict wears a permanent badge — leaving
+                          strict has cost and liability consequences the owner
+                          accepted, and they should keep seeing that. */}
+                      <span className={`badge ${b.groundingMode === "strict" ? "ok" : "warn"}`}>
+                        {b.groundingMode}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`badge ${b.allowedOrigins.length === 0 ? "warn" : "ok"}`}>
+                        {b.allowedOrigins.length === 0
+                          ? "any origin"
+                          : `${b.allowedOrigins.length} allowed`}
+                      </span>
+                    </td>
+                    <td className="num">{b.documents}</td>
+                    <td className="num">{b.chunks}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-      </Section>
+      </Card>
     </Shell>
   );
 }

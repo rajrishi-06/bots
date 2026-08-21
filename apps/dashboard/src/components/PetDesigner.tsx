@@ -78,21 +78,21 @@ export function PetDesigner({ botId }: { botId: string }) {
         </button>
       </form>
 
-      {error && <p className="status err">{error}</p>}
+      {error && <p className="badge err">{error}</p>}
 
       {spec && (
         <div className="preview">
           <LivePet spec={spec} gaze />
           <div className="meta">
-            <div className="u-data name">{spec.name}</div>
-            <div className="u-label">{spec.skeleton} · {Object.values(spec.parts).join(" / ")}</div>
+            <div className="mono name">{spec.name}</div>
+            <div className="label">{spec.skeleton} · {Object.values(spec.parts).join(" / ")}</div>
             <div className="swatch">
               {Object.entries(spec.palette).map(([k, c]) => (
                 <i key={k} style={{ background: c }} title={`${k} ${c}`} />
               ))}
             </div>
             <p className="blurb">{spec.personality.blurb}</p>
-            <p className="u-label">
+            <p className="label">
               energy {spec.personality.energy} · curiosity {spec.personality.curiosity}
               {attempts > 1 && ` · ${attempts} attempts to pass the contrast gate`}
             </p>
@@ -114,14 +114,14 @@ export function PetDesigner({ botId }: { botId: string }) {
         .ask input { flex: 1; }
         .preview {
           display: flex; gap: 24px; align-items: flex-start;
-          border: 1px solid var(--line); padding: 20px; background: var(--surface);
+          border: 1px solid var(--border); padding: 20px; background: var(--surface);
         }
         .preview :global(svg) { width: 140px; height: 140px; flex: 0 0 140px; }
         .meta { min-width: 0; }
-        .name { font-size: 1rem; color: var(--ink); margin-bottom: 2px; }
+        .name { font-size: 1rem; color: var(--fg); margin-bottom: 2px; }
         .swatch { display: flex; gap: 2px; margin: 10px 0; }
         .swatch i { width: 22px; height: 8px; display: block; }
-        .blurb { font-size: 0.875rem; color: var(--muted); margin: 0 0 8px; }
+        .blurb { font-size: 0.875rem; color: var(--fg-light); margin: 0 0 8px; }
         .actions { display: flex; gap: 8px; margin-top: 14px; }
       `}</style>
     </div>

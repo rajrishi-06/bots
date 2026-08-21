@@ -65,7 +65,7 @@ export function GroundingControl({
                 else setPending(m);
               }}
             >
-              <span className="u-label">{m}</span>
+              <span className="label">{m}</span>
               <span className="label">{i.label}</span>
               <span className="gate">{i.gate}</span>
             </button>
@@ -74,31 +74,31 @@ export function GroundingControl({
       </div>
 
       {current !== "strict" && (
-        <p className="u-data ack">
-          <span className="status warn">{current}</span>{" "}
+        <p className="mono ack">
+          <span className="badge warn">{current}</span>{" "}
           {acknowledgedAt ? (
-            <span style={{ color: "var(--faint)" }}>
+            <span style={{ color: "var(--fg-lighter)" }}>
               risks acknowledged {new Date(acknowledgedAt).toLocaleDateString()}
             </span>
           ) : (
-            <span className="status err">not acknowledged</span>
+            <span className="badge err">not acknowledged</span>
           )}
         </p>
       )}
 
-      {error && <p className="status err">{error}</p>}
+      {error && <p className="badge err">{error}</p>}
 
       {pending && (
         <div className="scrim" role="alertdialog" aria-label={`Confirm ${pending} mode`}>
           <div className="dialog">
-            <span className="u-label">Leaving strict mode</span>
+            <span className="label">Leaving strict mode</span>
             <h3>{GROUNDING_MODE_INFO[pending].label}</h3>
             <ul>
               {GROUNDING_MODE_INFO[pending].risks.map((r) => (
                 <li key={r}>{r}</li>
               ))}
             </ul>
-            <p className="u-data note">
+            <p className="mono note">
               Your acceptance is recorded against your account.
             </p>
             <div className="actions">
@@ -114,29 +114,29 @@ export function GroundingControl({
       )}
 
       <style jsx>{`
-        .modes { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+        .modes { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); }
         .mode {
           background: var(--bg); border: 0; text-align: left; cursor: pointer;
           padding: 14px 16px; display: flex; flex-direction: column; gap: 4px;
           border-left: 2px solid transparent;
         }
         .mode:hover { background: var(--surface); }
-        .mode[data-active="true"] { background: var(--surface); border-left-color: var(--ink); }
-        .label { font-size: 0.9375rem; color: var(--ink); }
-        .gate { font-size: 0.8125rem; color: var(--faint); }
+        .mode[data-active="true"] { background: var(--surface); border-left-color: var(--fg); }
+        .label { font-size: 0.9375rem; color: var(--fg); }
+        .gate { font-size: 0.8125rem; color: var(--fg-lighter); }
         .ack { margin: 14px 0 0; }
         .scrim {
           position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55);
           display: grid; place-items: center; padding: 24px; z-index: 50;
         }
         .dialog {
-          background: var(--bg); border: 1px solid var(--line-strong);
+          background: var(--bg); border: 1px solid var(--border-strong);
           padding: 24px; max-width: 460px; width: 100%;
         }
-        .dialog h3 { font-family: var(--display); font-size: 1.125rem; margin: 6px 0 12px; font-weight: 600; }
+        .dialog h3 { font-family: var(--sans); font-size: 1.125rem; margin: 6px 0 12px; font-weight: 600; }
         .dialog ul { margin: 0 0 14px; padding-left: 18px; }
-        .dialog li { font-size: 0.875rem; color: var(--muted); margin-bottom: 8px; line-height: 1.5; }
-        .note { color: var(--faint); margin: 0 0 18px; }
+        .dialog li { font-size: 0.875rem; color: var(--fg-light); margin-bottom: 8px; line-height: 1.5; }
+        .note { color: var(--fg-lighter); margin: 0 0 18px; }
         .actions { display: flex; gap: 8px; justify-content: flex-end; }
       `}</style>
     </div>

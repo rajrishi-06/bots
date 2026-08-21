@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Shell } from "@/components/Shell";
 import { getBot } from "@/lib/data";
-import { BotTabs } from "@/components/BotTabs";
 
 export default async function BotLayout({
   children, params,
@@ -12,24 +11,22 @@ export default async function BotLayout({
   if (!bot) notFound();
 
   return (
-    <Shell>
-      <div style={{ padding: "24px 0 0" }}>
-        <div className="u-label">§ Bot</div>
-        <h1>{bot.name}</h1>
-        <p className="u-data" style={{ color: "var(--faint)", margin: "4px 0 20px" }}>
-          {bot.publicKey}
+    <Shell
+      botId={id}
+      crumbs={
+        <>
+          <Link href="/" className="muted">Bots</Link>
+          <span className="sep">/</span>
+          <strong>{bot.name}</strong>
           {bot.groundingMode !== "strict" && (
-            <>
-              {"  ·  "}
-              <span className="status warn">
-                {bot.groundingMode}
-                {bot.groundingModeAckAt ? "" : " · UNACKNOWLEDGED"}
-              </span>
-            </>
+            <span className="badge warn" style={{ marginLeft: 4 }}>
+              {bot.groundingMode}
+              {bot.groundingModeAckAt ? "" : " · unacknowledged"}
+            </span>
           )}
-        </p>
-        <BotTabs id={id} />
-      </div>
+        </>
+      }
+    >
       {children}
     </Shell>
   );

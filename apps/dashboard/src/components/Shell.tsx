@@ -1,35 +1,62 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { SideNav } from "./SideNav";
 
-/** Numbered sections and a margin rail, per DESIGN.md. No sidebar-and-cards. */
-export function Shell({ children }: { children: ReactNode }) {
+/** App shell: persistent left rail, sticky header, cards in the main column. */
+export function Shell({
+  botId, crumbs, actions, children,
+}: {
+  botId?: string;
+  crumbs: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <div className="shell">
-      <header>
-        <Link href="/" className="mark">bots</Link>
-        <span className="u-label">studio</span>
-      </header>
-      {children}
+    <div className="app">
+      <aside className="sidebar">
+        <Link href="/" className="brand-mark">
+          <span className="brand-dot" aria-hidden />
+          bots
+        </Link>
+        <SideNav botId={botId} />
+      </aside>
+
+      <div className="main">
+        <header className="topbar">
+          <div className="crumbs">{crumbs}</div>
+          {actions && <div style={{ display: "flex", gap: 8 }}>{actions}</div>}
+        </header>
+        <div className="content">{children}</div>
+      </div>
     </div>
   );
 }
 
-export function Section({
-  n, label, title, children, aside,
-}: { n: string; label: string; title?: string; children: ReactNode; aside?: ReactNode }) {
+export function Card({
+  title, description, actions, children, flush,
+}: {
+  title?: string;
+  description?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+  flush?: boolean;
+}) {
   return (
-    <section className="section">
-      <div className="rail">
-        <div className="rail-label">
-          <div className="u-label">§{n}</div>
-          <div className="u-label">{label}</div>
-          {aside}
+    <section className="card">
+      {(title || actions) && (
+        <div className="card-head">
+          <div>
+            {title && <h2>{title}</h2>}
+            {description && (
+              <p className="muted small" style={{ marginTop: 2 }}>
+                {description}
+              </p>
+            )}
+          </div>
+          {actions}
         </div>
-        <div>
-          {title && <h2>{title}</h2>}
-          {children}
-        </div>
-      </div>
+      )}
+      <div className={flush ? "card-body flush" : "card-body"}>{children}</div>
     </section>
   );
 }

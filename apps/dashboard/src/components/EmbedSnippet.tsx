@@ -6,7 +6,7 @@ export function EmbedSnippet({ snippet }: { snippet: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div>
-      <pre className="u-data">{snippet}</pre>
+      <pre className="mono">{snippet}</pre>
       <button
         className="btn"
         onClick={async () => {
@@ -19,7 +19,7 @@ export function EmbedSnippet({ snippet }: { snippet: string }) {
       </button>
       <style jsx>{`
         pre {
-          border: 1px solid var(--line);
+          border: 1px solid var(--border);
           background: var(--surface);
           padding: 14px;
           overflow-x: auto;

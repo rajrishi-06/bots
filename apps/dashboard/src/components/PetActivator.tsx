@@ -10,7 +10,7 @@ export function PetActivator({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
-  if (isActive) return <span className="status ok">active</span>;
+  if (isActive) return <span className="badge ok">active</span>;
 
   return (
     <button

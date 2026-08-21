@@ -1,4 +1,4 @@
-import { Section } from "@/components/Shell";
+import { Card } from "@/components/Shell";
 import { Playground } from "@/components/Playground";
 import { getBot } from "@/lib/data";
 import { notFound } from "next/navigation";
@@ -11,17 +11,12 @@ export default async function PlaygroundPage({ params }: { params: Promise<{ id:
   if (!bot) notFound();
 
   return (
-    <Section
-      n="02"
-      label="Playground"
+    <Card
       title="Ask, and watch the retrieval"
-      aside={
-        <p className="u-data" style={{ color: "var(--faint)", marginTop: 12 }}>
-          Runs the same pipeline the embedded bot does.
-        </p>
-      }
+      description="Runs the same pipeline the embedded bot does."
+      flush
     >
       <Playground botId={bot.id} threshold={bot.gateThreshold} mode={bot.groundingMode} />
-    </Section>
+    </Card>
   );
 }
