@@ -167,3 +167,97 @@ export async function listPets(botId: string): Promise<PetRow[]> {
 }
 
 export { GROUNDING_MODE_INFO };
+
+export interface ConversationRow {
+  id: string;
+  visitorId: string | null;
+  origin: string | null;
+  turns: number;
+  lastQuestion: string;
+  gated: number;
+  thumbsDown: number;
+  createdAt: Date;
+}
+
+export async function listConversations(botId: string, limit = 50): Promise<ConversationRow[]> {
+  return scopedToBot(botId, async (tx) => {
+    const rows = await tx<Record<string, never>[]>`
+      SELECT c.id, c.visitor_id, c.origin, c.created_at,
+             count(m.id) FILTER (WHERE m.role = 'user') AS turns,
+             count(*) FILTER (WHERE m.gate_decision LIKE '%refused%') AS gated,
+             count(*) FILTER (WHERE m.helpful IS FALSE) AS thumbs_down,
+             (SELECT content FROM messages
+               WHERE conversation_id = c.id AND role = 'user'
+               ORDER BY created_at DESC LIMIT 1) AS last_question
+      FROM conversations c
+      LEFT JOIN messages m ON m.conversation_id = c.id
+      WHERE c.bot_id = ${botId}
+      GROUP BY c.id
+      ORDER BY c.created_at DESC
+      LIMIT ${limit}`;
+    return (rows as unknown as Record<string, string | Date | null>[]).map((r) => ({
+      id: r.id as string,
+      visitorId: r.visitor_id as string | null,
+      origin: r.origin as string | null,
+      turns: Number(r.turns),
+      gated: Number(r.gated),
+      thumbsDown: Number(r.thumbs_down),
+      lastQuestion: (r.last_question as string) ?? "",
+      createdAt: r.created_at as Date,
+    }));
+  });
+}
+
+export interface UnansweredRow {
+  question: string;
+  occurrences: number;
+  lastAsked: Date;
+  reason: string;
+  /** True when a visitor also marked the answer unhelpful, not just gated. */
+  thumbsDown: boolean;
+}
+
+/**
+ * Questions the knowledge base could not answer.
+ *
+ * Two sources, deliberately merged: answers the relevance gate refused, and
+ * answers a visitor marked unhelpful. The first is what the corpus is missing;
+ * the second is what it gets WRONG, which the gate by definition cannot detect.
+ *
+ * Grouped by the question text so a thing twenty people asked appears once,
+ * with a count — a flat log buries the signal under repetition.
+ */
+export async function listUnanswered(botId: string, limit = 50): Promise<UnansweredRow[]> {
+  return scopedToBot(botId, async (tx) => {
+    const rows = await tx<Record<string, never>[]>`
+      WITH failures AS (
+        SELECT
+          (SELECT content FROM messages q
+            WHERE q.conversation_id = m.conversation_id AND q.role = 'user'
+              AND q.created_at <= m.created_at
+            ORDER BY q.created_at DESC LIMIT 1) AS question,
+          m.created_at,
+          m.gate_decision,
+          m.helpful
+        FROM messages m
+        WHERE m.bot_id = ${botId} AND m.role = 'assistant'
+          AND (m.gate_decision LIKE '%refused%' OR m.helpful IS FALSE)
+      )
+      SELECT lower(question) AS key, min(question) AS question,
+             count(*) AS occurrences, max(created_at) AS last_asked,
+             min(gate_decision) AS reason,
+             bool_or(helpful IS FALSE) AS thumbs_down
+      FROM failures
+      WHERE question IS NOT NULL
+      GROUP BY lower(question)
+      ORDER BY count(*) DESC, max(created_at) DESC
+      LIMIT ${limit}`;
+    return (rows as unknown as Record<string, string | Date | boolean | null>[]).map((r) => ({
+      question: r.question as string,
+      occurrences: Number(r.occurrences),
+      lastAsked: r.last_asked as Date,
+      reason: (r.reason as string) ?? "",
+      thumbsDown: Boolean(r.thumbs_down),
+    }));
+  });
+}

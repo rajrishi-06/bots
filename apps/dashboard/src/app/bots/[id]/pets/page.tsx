@@ -1,5 +1,7 @@
 import { Section } from "@/components/Shell";
 import { LivePet } from "@/components/LivePet";
+import { PetActivator } from "@/components/PetActivator";
+import { PetDesigner } from "@/components/PetDesigner";
 import { listPets } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +22,8 @@ export default async function PetsPage({ params }: { params: Promise<{ id: strin
         </p>
       }
     >
+      <PetDesigner botId={id} />
+
       {pets.length === 0 ? (
         <p className="empty-note">
           No pets yet. Describe one — “a sleepy lavender axolotl” — and the
@@ -32,9 +36,7 @@ export default async function PetsPage({ params }: { params: Promise<{ id: strin
             <div className="pet-cell" key={p.id} data-active={p.isActive}>
               <LivePet spec={p.spec} />
               <span className="u-data">{p.name}</span>
-              <span className={`status ${p.isActive ? "ok" : "idle"}`}>
-                {p.isActive ? "active" : "inactive"}
-              </span>
+              <PetActivator botId={id} petId={p.id} isActive={p.isActive} />
               {p.createdFromPrompt && (
                 <span className="u-label" style={{ textTransform: "none", letterSpacing: 0 }}>
                   “{p.createdFromPrompt}”

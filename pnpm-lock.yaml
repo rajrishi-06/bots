@@ -57,6 +57,9 @@ importers:
 
   apps/dashboard:
     dependencies:
+      '@aws-sdk/client-sqs':
+        specifier: ^3.726.1
+        version: 3.1115.0
       '@bots/core':
         specifier: workspace:*
         version: link:../../packages/core

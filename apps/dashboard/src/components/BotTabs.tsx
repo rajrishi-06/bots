@@ -8,6 +8,7 @@ const TABS = [
   ["playground", "Playground"],
   ["pets", "Pets"],
   ["knowledge", "Knowledge"],
+  ["conversations", "Monitor"],
   ["embed", "Embed"],
 ] as const;
 

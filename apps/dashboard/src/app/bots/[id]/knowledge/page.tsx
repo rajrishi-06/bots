@@ -1,4 +1,5 @@
 import { Section } from "@/components/Shell";
+import { IngestForm } from "@/components/IngestForm";
 import { listDocuments } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,8 @@ export default async function KnowledgePage({ params }: { params: Promise<{ id: 
         ) : undefined
       }
     >
+      <IngestForm botId={id} />
+
       {docs.length === 0 ? (
         <p className="empty-note">
           Nothing indexed yet. Upload a file, crawl a site, or paste an answer.

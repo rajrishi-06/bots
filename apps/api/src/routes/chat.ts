@@ -9,7 +9,7 @@ import {
 import { retrieve } from "@bots/rag";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { Redis } from "ioredis";
-import type { Sql } from "postgres";
+import type { Sql, TransactionSql } from "postgres";
 import { resolveBot, withBot } from "../db.js";
 import { checkQuota, checkRateLimit, originAllowed } from "../limits.js";
 
@@ -27,8 +27,67 @@ interface ChatBody {
   message?: string;
   history?: { role: "user" | "assistant"; content: string }[];
   conversationId?: string;
+  /** Opaque per-visitor id from the widget. Never a user identifier. */
+  visitorId?: string;
   /** Set by the playground. Returns the retrieval trace alongside the answer. */
   debug?: boolean;
+}
+
+/**
+ * Record the exchange.
+ *
+ * Not analytics for its own sake: the stored `retrieved_chunk_ids`, `top_score`
+ * and `gate_decision` are what let the dashboard show WHY a bot said what it
+ * said, and what turns a real thumbs-down into an eval case. Scores are stored
+ * as they were at answer time — thresholds get retuned, and a stored score must
+ * not silently re-decide a past answer.
+ *
+ * Failures here are swallowed. A visitor's answer must not depend on our
+ * bookkeeping succeeding.
+ */
+async function record(
+  tx: TransactionSql,
+  input: {
+    botId: string;
+    conversationId: string | undefined;
+    visitorId: string | undefined;
+    origin: string | undefined;
+    question: string;
+    answer: string;
+    chunkIds: string[];
+    topScore: number | undefined;
+    gateDecision: string;
+  },
+): Promise<string | undefined> {
+  try {
+    let conversationId = input.conversationId;
+    if (conversationId) {
+      // Confirm it belongs to this bot before appending — RLS scopes the read,
+      // so a foreign id simply returns nothing rather than leaking.
+      const rows = await tx`SELECT id FROM conversations WHERE id = ${conversationId}`;
+      if (rows.length === 0) conversationId = undefined;
+    }
+    if (!conversationId) {
+      const rows = await tx<{ id: string }[]>`
+        INSERT INTO conversations (bot_id, visitor_id, origin)
+        VALUES (${input.botId}, ${input.visitorId ?? null}, ${input.origin ?? null})
+        RETURNING id`;
+      conversationId = rows[0]!.id;
+    }
+
+    await tx`
+      INSERT INTO messages (conversation_id, bot_id, role, content)
+      VALUES (${conversationId}, ${input.botId}, 'user', ${input.question})`;
+    await tx`
+      INSERT INTO messages (conversation_id, bot_id, role, content, retrieved_chunk_ids, top_score, gate_decision)
+      VALUES (${conversationId}, ${input.botId}, 'assistant', ${input.answer},
+              ${input.chunkIds}, ${input.topScore?.toFixed(4) ?? null}, ${input.gateDecision})`;
+
+    return conversationId;
+  } catch (err) {
+    console.error("[chat] failed to record conversation:", err);
+    return undefined;
+  }
 }
 
 function sse(reply: FastifyReply): void {
@@ -147,7 +206,17 @@ export function registerChat(app: FastifyInstance, deps: ChatDeps): void {
       // out-of-scope question, and it is also free.
       if (gate.refuse) {
         send(reply, { type: "delta", text: bot.fallback_message });
-        send(reply, { type: "done", gated: true });
+        const conversationId = await withBot(sql, bot.id, (tx) =>
+          record(tx, {
+            botId: bot.id, conversationId: body.conversationId, visitorId: body.visitorId,
+            origin, question: message, answer: bot.fallback_message,
+            chunkIds: [], topScore: chunks[0]?.score, gateDecision: gate.reason,
+          }),
+        );
+        // A refusal is the most valuable thing to record: it is the question the
+        // knowledge base could not answer, which is exactly what the owner needs
+        // to see and what becomes an eval case.
+        send(reply, { type: "done", gated: true, conversationId });
         reply.raw.end();
         return reply;
       }
@@ -180,8 +249,17 @@ export function registerChat(app: FastifyInstance, deps: ChatDeps): void {
       }
 
       const { dropped } = validateCitations(buffered, allowedIds);
+      const conversationId = await withBot(sql, bot.id, (tx) =>
+        record(tx, {
+          botId: bot.id, conversationId: body.conversationId, visitorId: body.visitorId,
+          origin, question: message, answer: buffered,
+          chunkIds: context.map((c) => c.id), topScore: chunks[0]?.score,
+          gateDecision: gate.reason,
+        }),
+      );
       send(reply, {
         type: "done",
+        conversationId,
         citations: allowedIds.filter((id) => buffered.includes(`[${id}]`)),
         ...(dropped.length ? { droppedCitations: dropped } : {}),
       });

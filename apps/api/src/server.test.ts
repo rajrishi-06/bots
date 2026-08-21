@@ -25,6 +25,7 @@ let appSql: postgres.Sql;
 let redis: Redis;
 let orgId: string;
 let botId: string;
+let lockedBotId: string;
 /**
  * Unique per run. public_key is globally unique, and a run that dies before
  * afterAll leaves rows that make every later run fail in beforeAll — which
@@ -46,6 +47,17 @@ function frames(body: string): { type: string; [k: string]: unknown }[] {
 }
 const textOf = (body: string) =>
   frames(body).filter((f) => f.type === "delta").map((f) => f.text as string).join("");
+
+/** The trailing `done` frame, typed. Every response ends with exactly one. */
+interface DoneFrame {
+  type: "done";
+  conversationId?: string;
+  gated?: boolean;
+  blocked?: string;
+  citations?: string[];
+  droppedCitations?: string[];
+}
+const doneOf = (body: string): DoneFrame => frames(body).at(-1) as unknown as DoneFrame;
 
 beforeAll(async () => {
   owner = postgres(OWNER_URL, { max: 2 });
@@ -70,9 +82,11 @@ beforeAll(async () => {
     RETURNING id`;
   botId = bot!.id;
 
-  await owner`
+  const [locked] = await owner`
     INSERT INTO bots (org_id, name, public_key, allowed_origins)
-    VALUES (${orgId}, 'Locked', ${LOCKED_KEY}, ARRAY['acme.com'])`;
+    VALUES (${orgId}, 'Locked', ${LOCKED_KEY}, ARRAY['acme.com'])
+    RETURNING id`;
+  lockedBotId = locked!.id;
 
   const [doc] = await owner`
     INSERT INTO documents (bot_id, source_type, title, checksum)
@@ -108,7 +122,7 @@ afterAll(async () => {
   redis?.disconnect();
 });
 
-const chat = (payload: object, headers: Record<string, string> = {}) =>
+const chat = (payload: Record<string, unknown>, headers: Record<string, string> = {}) =>
   app.inject({ method: "POST", url: "/v1/chat", payload, headers: { origin: "https://acme.com", ...headers } });
 
 describe("GET /health", () => {
@@ -299,5 +313,84 @@ describe("tenant isolation over HTTP", () => {
       | undefined;
     // The other bot has no documents at all — it must not see Acme's.
     expect(trace?.chunks ?? []).toHaveLength(0);
+  });
+});
+
+describe("conversation recording", () => {
+  it("records the exchange with the retrieval that produced it", async () => {
+    await redis.flushdb();
+    const res = await chat({ botKey: KEY, message: "How long do EU customers have for a refund?", visitorId: "v-42" });
+    const done = doneOf(res.body);
+    expect(done.conversationId).toBeTruthy();
+
+    const msgs = await owner`
+      SELECT role, content, retrieved_chunk_ids, top_score, gate_decision
+      FROM messages WHERE conversation_id = ${done.conversationId!} ORDER BY created_at`;
+    expect(msgs).toHaveLength(2);
+    expect(msgs[0]!.role).toBe("user");
+    expect(msgs[1]!.role).toBe("assistant");
+    // The stored retrieval is what lets the dashboard show WHY it answered that.
+    expect(msgs[1]!.retrieved_chunk_ids.length).toBeGreaterThan(0);
+    expect(Number(msgs[1]!.top_score)).toBeGreaterThan(0);
+    expect(msgs[1]!.gate_decision).toContain("threshold");
+  });
+
+  it("continues an existing conversation rather than starting a new one", async () => {
+    await redis.flushdb();
+    const first = await chat({ botKey: KEY, message: "refund window" });
+    const id = doneOf(first.body).conversationId!;
+
+    const second = await chat({ botKey: KEY, message: "and invoices?", conversationId: id });
+    expect(doneOf(second.body).conversationId).toBe(id);
+
+    const count = await owner`SELECT count(*)::int AS n FROM messages WHERE conversation_id = ${id}`;
+    expect(count[0]!.n).toBe(4);
+  });
+
+  it("records a REFUSAL too — that is the question the corpus could not answer", async () => {
+    await redis.flushdb();
+    const res = await chat({ botKey: KEY, message: "What is the capital of France?" });
+    const done = doneOf(res.body);
+    expect(done.gated).toBe(true);
+    const msgs = await owner`
+      SELECT role, gate_decision FROM messages
+      WHERE conversation_id = ${done.conversationId!} AND role = 'assistant'`;
+    expect(msgs[0]!.gate_decision).toContain("refused");
+  });
+
+  it("ignores a conversation id belonging to another bot", async () => {
+    await redis.flushdb();
+    const [foreign] = await owner`
+      INSERT INTO conversations (bot_id, visitor_id) VALUES (${lockedBotId}, 'x') RETURNING id`;
+    const res = await chat({ botKey: KEY, message: "refund window", conversationId: foreign!.id });
+    const id = doneOf(res.body).conversationId;
+    // A new conversation, not an append to somebody else's.
+    expect(id).not.toBe(foreign!.id);
+  });
+});
+
+describe("POST /v1/feedback", () => {
+  it("records a thumb against the latest assistant turn", async () => {
+    await redis.flushdb();
+    const res = await chat({ botKey: KEY, message: "refund window" });
+    const id = doneOf(res.body).conversationId!;
+
+    const fb = await app.inject({
+      method: "POST", url: "/v1/feedback", headers: { origin: "https://acme.com" },
+      payload: { botKey: KEY, conversationId: id, helpful: false },
+    });
+    expect(fb.statusCode).toBe(200);
+
+    const [msg] = await owner`
+      SELECT helpful FROM messages WHERE conversation_id = ${id} AND role = 'assistant'`;
+    expect(msg!.helpful).toBe(false);
+  });
+
+  it("refuses feedback from a disallowed origin", async () => {
+    const fb = await app.inject({
+      method: "POST", url: "/v1/feedback", headers: { origin: "https://evil.example" },
+      payload: { botKey: LOCKED_KEY, conversationId: "00000000-0000-0000-0000-000000000000", helpful: true },
+    });
+    expect(fb.statusCode).toBe(403);
   });
 });

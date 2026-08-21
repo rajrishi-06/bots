@@ -6,6 +6,7 @@ import { createPool } from "./db.js";
 import { createRedis } from "./limits.js";
 import { registerChat } from "./routes/chat.js";
 import { registerConfig } from "./routes/config.js";
+import { registerFeedback } from "./routes/feedback.js";
 
 export interface ServerDeps {
   sql?: Sql;
@@ -64,6 +65,7 @@ export async function buildServer(deps: ServerDeps = {}) {
 
   registerConfig(app, { sql });
   registerChat(app, { sql, redis, provider, reranker });
+  registerFeedback(app, { sql });
 
   app.addHook("onClose", async () => {
     // Only tear down what we created — a test owning the pool closes it itself.
