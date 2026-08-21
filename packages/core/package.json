@@ -1,0 +1,23 @@
+{
+  "name": "@bots/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./pet": "./src/pet/index.ts",
+    "./models": "./src/models/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@google/genai": "^2.8.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3",
+    "vitest": "3.0.5"
+  }
+}

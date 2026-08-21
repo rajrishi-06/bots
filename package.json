@@ -1,0 +1,23 @@
+{
+  "name": "bots",
+  "private": true,
+  "packageManager": "pnpm@10.11.0",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:push": "pnpm --filter @bots/db run push",
+    "db:studio": "pnpm --filter @bots/db run studio"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.5",
+    "turbo": "2.5.8",
+    "typescript": "5.7.3",
+    "vitest": "3.0.5"
+  }
+}
