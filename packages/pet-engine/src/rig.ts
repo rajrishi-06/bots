@@ -1,6 +1,6 @@
 import type { PetSpec } from "@bots/core/pet";
 import { DOZE_AFTER_MS, FULL_TILT_SPEED, PIVOT, SKELETON_SCALE, TIER } from "./pivots.js";
-import { PARTS, chestPanel, eye, headSidePlates, type PartContext } from "./parts.js";
+import { PARTS, chestPanel, eye, headSidePlates, resolveParts, type PartContext } from "./parts.js";
 import {
   MotionValue,
   Spring,
@@ -166,7 +166,8 @@ export class PetRig {
 
   #build(): void {
     const c = this.#context();
-    const { parts, palette } = this.#spec;
+    const parts = resolveParts(this.#spec.parts);
+    const { palette } = this.#spec;
     const scale = SKELETON_SCALE[this.#spec.skeleton];
     const s = (v: number) => `scale(${v})`;
     // Scale about each joint's own pivot, so proportion changes never shift it.

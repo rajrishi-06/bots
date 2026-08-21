@@ -1,7 +1,7 @@
 import { REFERENCE_PET, type PetSpec } from "@bots/core/pet";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PetRig } from "./rig.js";
-import { PIVOT } from "./pivots.js";
+import { PIVOT, SKELETON_SCALE, SLOT_HALF_WIDTH } from "./pivots.js";
 import { ticker } from "./spring.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -101,10 +101,45 @@ describe("structure", () => {
     }
   });
 
-  it("does not grow two sets of ears on a cat", () => {
+  it("does not grow FOUR ears on a cat", () => {
+    // The cat head draws its own ears; an `ears` crown stacks a second pair on
+    // top. Caught by looking at rendered output, not by any structural check —
+    // every joint was present and every id unique, and the pet had four ears.
     make({ ...REFERENCE_PET, parts: { ...REFERENCE_PET.parts, head: "cat", crown: "ears" } });
-    // Side plates are suppressed when the crown already occupies the silhouette.
+    const crown = joint("crown")!;
+    expect(crown.innerHTML.trim()).toBe(""); // crown resolved away
+    // Exactly one pair of ear triangles, from the head itself.
+    const earPaths = [...svg.querySelectorAll("path")].filter((p) =>
+      /^M(18|54) 13\.5/.test(p.getAttribute("d") ?? ""),
+    );
+    expect(earPaths).toHaveLength(2);
+  });
+
+  it("suppresses side plates when the crown already occupies the silhouette", () => {
+    make({ ...REFERENCE_PET, parts: { ...REFERENCE_PET.parts, head: "round", crown: "ears" } });
     expect(svg.innerHTML).not.toContain('x="5" y="25.5"');
+  });
+
+  it("keeps every skeleton inside the 72-unit viewBox", () => {
+    // `overflow: visible` means anything past the box bleeds into neighbouring
+    // pets in a gallery rather than clipping. bigHead at 1.18 did exactly that,
+    // and only showed up on looking at rendered output.
+    const slots = [
+      { name: "head", pivotX: PIVOT.head[0], half: SLOT_HALF_WIDTH.head },
+      { name: "torso", pivotX: PIVOT.torso[0], half: SLOT_HALF_WIDTH.torso },
+      { name: "limb", pivotX: PIVOT.armR[0], half: SLOT_HALF_WIDTH.limb },
+    ] as const;
+
+    for (const skeleton of ["balanced", "bigHead", "longBody", "stout"] as const) {
+      const scale = SKELETON_SCALE[skeleton];
+      for (const slot of slots) {
+        const k = scale[slot.name];
+        const right = slot.pivotX + slot.half * k;
+        const left = slot.pivotX - slot.half * k;
+        expect(right, `${skeleton}.${slot.name} overflows right`).toBeLessThanOrEqual(72);
+        expect(left, `${skeleton}.${slot.name} overflows left`).toBeGreaterThanOrEqual(0);
+      }
+    }
   });
 });
 

@@ -142,6 +142,21 @@ const feet: Record<PetParts["feet"], Part> = {
   none: () => "",
 };
 
+/**
+ * Compatibility rules between slots.
+ *
+ * The parts library is a flat set of independent choices, which is what keeps
+ * it cheap to extend — but a few combinations are geometrically wrong rather
+ * than merely ugly, and the model is free to pick them. Resolving here means
+ * the rule lives in ONE place instead of inside each part function, and the
+ * stored spec keeps the user's actual choice.
+ */
+export function resolveParts(parts: PetParts): PetParts {
+  // The cat head draws its own ears. An `ears` crown on top of it renders FOUR.
+  if (parts.head === "cat" && parts.crown === "ears") return { ...parts, crown: "none" };
+  return parts;
+}
+
 /** Ear plates flanking the head. Skipped when the crown already occupies the
  *  silhouette's sides, so a cat does not grow a second pair of ears. */
 export const headSidePlates = (c: PartContext, parts: PetParts): string =>

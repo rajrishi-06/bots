@@ -51,11 +51,29 @@ export const FULL_TILT_SPEED = 900;
 /** Quiet time before the pet dozes off. Any pointer movement wakes it. */
 export const DOZE_AFTER_MS = 15_000;
 
-/** Per-skeleton proportion scalars. These scale what hangs off a joint; they
- *  never move a joint, because moving one would break hot-swap. */
+/**
+ * Half-width of the widest geometry hanging off each joint, measured from that
+ * joint's pivot. Scaling a slot by k puts its edge at pivotX ± halfWidth·k, and
+ * `overflow: visible` means anything past the 72-unit box bleeds into the
+ * neighbouring pet in a gallery rather than clipping.
+ *
+ * head  the side plates, x 5…67 about pivot x=36  → 31
+ * torso the capsule, x 18…54 about pivot x=36     → 18.5 (egg is 18.5 too)
+ * limb  the noodle arm plus its 4.4 stroke, about pivot x=54.5 → 7.2
+ */
+export const SLOT_HALF_WIDTH = { head: 31, torso: 18.5, limb: 7.2 } as const;
+
+/**
+ * Per-skeleton proportion scalars. These scale what hangs off a joint; they
+ * never move a joint, because moving one would break hot-swap.
+ *
+ * The head ceiling is 1.12, not higher, and that is a geometric limit rather
+ * than taste: at k=1.18 the side plates land at −0.6…72.6, outside the box.
+ * 1.12 lands at 1.3…70.7. See SLOT_HALF_WIDTH; the rig test enforces it.
+ */
 export const SKELETON_SCALE = {
   balanced: { head: 1, torso: 1, limb: 1 },
-  bigHead: { head: 1.18, torso: 0.88, limb: 0.92 },
+  bigHead: { head: 1.12, torso: 0.88, limb: 0.92 },
   longBody: { head: 0.9, torso: 1.2, limb: 1.1 },
   stout: { head: 1.06, torso: 1.08, limb: 0.82 },
 } as const;
