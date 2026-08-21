@@ -1,5 +1,5 @@
 import type { PetSpec } from "@bots/core/pet";
-import { DOZE_AFTER_MS, FULL_TILT_SPEED, PIVOT, SKELETON_SCALE, TIER } from "./pivots.js";
+import { DOZE_AFTER_MS, FULL_TILT_SPEED, PET_SLOTS, PIVOT, SKELETON_SCALE, TIER, type PetSlot } from "./pivots.js";
 import { PARTS, chestFor, eye, headSidePlates, partFor, resolveParts, type PartContext } from "./parts.js";
 import {
   MotionValue,
@@ -75,6 +75,7 @@ export class PetRig {
   #asleep = false;
   #mood: Mood = "open";
   #destroyed = false;
+  #selected: PetSlot | null = null;
 
   constructor(svg: SVGSVGElement, spec: PetSpec, opts: RigOptions = {}) {
     this.#svg = svg;
@@ -133,6 +134,39 @@ export class PetRig {
     this.#cleanups.push(() => document.removeEventListener("visibilitychange", onVisibility));
   }
 
+  /* ── Editing ────────────────────────────────────────────────────────────── */
+
+  /**
+   * Focus one editing slot by dimming the others.
+   *
+   * Dimming rather than drawing a selection box, because the pet is ALIVE in
+   * the editor — a box computed from getBBox() would have to be recomputed
+   * every frame to keep up with the spring chain, and would still jitter.
+   * Opacity is stable under motion and reads as "this is the piece you are
+   * changing" without freezing the thing that makes the pet worth editing.
+   */
+  setSelection(slot: PetSlot | null): void {
+    this.#selected = slot;
+    this.#applySelection();
+  }
+
+  /** Which slot a click landed on, or null for the background. */
+  static slotFromEvent(event: Event): PetSlot | null {
+    const el = event.target as Element | null;
+    const group = el?.closest?.("[data-slot]");
+    const slot = group?.getAttribute("data-slot");
+    return (PET_SLOTS as readonly string[]).includes(slot ?? "") ? (slot as PetSlot) : null;
+  }
+
+  #applySelection(): void {
+    for (const g of this.#svg.querySelectorAll<SVGGElement>("[data-slot]")) {
+      const mine = g.getAttribute("data-slot") === this.#selected;
+      // No selection at all → everything at full strength.
+      if (this.#selected === null || mine) g.removeAttribute("data-dim");
+      else g.setAttribute("data-dim", "true");
+    }
+  }
+
   /* ── Public API ─────────────────────────────────────────────────────────── */
 
   /** Live velocity of whatever is carrying the pet, px/s. Drives the whole rig. */
@@ -186,6 +220,9 @@ export class PetRig {
     this.#spec = spec;
     this.#build();
     this.#rebind();
+    // #build() replaces every node, so the selection has to be re-applied or an
+    // edit would silently clear the highlight on the part being edited.
+    this.#applySelection();
   }
 
   destroy(): void {
@@ -264,30 +301,34 @@ export class PetRig {
                   stroke-linecap="round" stroke-linejoin="round" fill="none"/>
           </g>
 
-          <g data-joint="crown">${partFor(theme, "crown", parts.crown)(c)}</g>
+          <g data-joint="crown"><g data-slot="crown">${partFor(theme, "crown", parts.crown)(c)}</g></g>
 
           <g transform="${about(PIVOT.armL, scale.limb)}">
-            <g data-joint="armL">${PARTS.arms[parts.arms].left(c)}</g>
+            <g data-joint="armL"><g data-slot="arms">${PARTS.arms[parts.arms].left(c)}</g></g>
           </g>
           <g transform="${about(PIVOT.armR, scale.limb)}">
-            <g data-joint="armR">${PARTS.arms[parts.arms].right(c)}</g>
+            <g data-joint="armR"><g data-slot="arms">${PARTS.arms[parts.arms].right(c)}</g></g>
           </g>
-          <g data-joint="feet">${partFor(theme, "feet", parts.feet)(c)}</g>
+          <g data-joint="feet"><g data-slot="feet">${partFor(theme, "feet", parts.feet)(c)}</g></g>
 
           <g transform="${about(PIVOT.torso, scale.torso)}">
             <g data-joint="torso">
-              ${partFor(theme, "torso", parts.torso)(c)}
+              <g data-slot="torso">${partFor(theme, "torso", parts.torso)(c)}</g>
               ${chest ? chest(c) : ""}
             </g>
           </g>
 
           <g transform="${about(PIVOT.head, scale.head)}">
             <g data-joint="head">
-              ${headSidePlates(c, parts, theme)}
-              ${partFor(theme, "head", parts.head)(c)}
-              ${partFor(theme, "face", parts.face)(c)}
-              <g clip-path="${c.g("faceclip")}">
-                <g data-joint="gaze">${eye(c, 27.6)}${eye(c, 44.4)}</g>
+              <g data-slot="head">
+                ${headSidePlates(c, parts, theme)}
+                ${partFor(theme, "head", parts.head)(c)}
+              </g>
+              <g data-slot="face">
+                ${partFor(theme, "face", parts.face)(c)}
+                <g clip-path="${c.g("faceclip")}">
+                  <g data-joint="gaze">${eye(c, 27.6)}${eye(c, 44.4)}</g>
+                </g>
               </g>
               <rect class="pet-squint" x="12" y="14" width="48" height="25" rx="9"
                     fill="${palette.visorLo}" opacity="0"/>
@@ -323,6 +364,8 @@ export class PetRig {
   #styles(): string {
     if (this.#opts.reducedMotion) {
       return `.pet-cursor,.pet-zzz{animation:none}
+      [data-dim="true"]{opacity:.2;transition:opacity .12s ease}
+      .pet-squint,.pet-shadow,.pet-zzz,.pet-glow{pointer-events:none}
       @media (prefers-reduced-motion: reduce){.pet-cursor,.pet-zzz{animation:none}}`;
     }
     // ONLY opacity animates in CSS. Breathing and the glow moved to the ticker,
@@ -334,6 +377,8 @@ export class PetRig {
       @keyframes ${this.#uid}-c{0%,50%{opacity:1}50.01%,100%{opacity:0}}
       .pet-zzz{animation:${this.#uid}-z 2.8s ease-out infinite}
       @keyframes ${this.#uid}-z{0%{opacity:0}40%{opacity:.55}100%{opacity:0}}
+      [data-dim="true"]{opacity:.2;transition:opacity .12s ease}
+      .pet-squint,.pet-shadow,.pet-zzz,.pet-glow{pointer-events:none}
       @media (prefers-reduced-motion: reduce){.pet-cursor,.pet-zzz{animation:none}}
     `;
   }

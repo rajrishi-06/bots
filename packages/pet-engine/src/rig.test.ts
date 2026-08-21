@@ -1,7 +1,7 @@
 import { REFERENCE_PET, type PetSpec } from "@bots/core/pet";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PetRig } from "./rig.js";
-import { PIVOT, SKELETON_SCALE, SLOT_HALF_WIDTH } from "./pivots.js";
+import { PET_SLOTS, PIVOT, SKELETON_SCALE, SLOT_HALF_WIDTH } from "./pivots.js";
 import { ticker } from "./spring.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -106,7 +106,9 @@ describe("structure", () => {
     // top. Caught by looking at rendered output, not by any structural check —
     // every joint was present and every id unique, and the pet had four ears.
     make({ ...REFERENCE_PET, parts: { ...REFERENCE_PET.parts, head: "cat", crown: "ears" } });
-    const crown = joint("crown")!;
+    // The crown JOINT now holds an (empty) editing slot, so emptiness is a
+    // property of the slot's contents, not of the joint's markup.
+    const crown = svg.querySelector('[data-slot="crown"]')!;
     expect(crown.innerHTML.trim()).toBe(""); // crown resolved away
     // Exactly one pair of ear triangles, from the head itself.
     const earPaths = [...svg.querySelectorAll("path")].filter((p) =>
@@ -477,5 +479,97 @@ describe("themes", () => {
       r.destroy();
       el.remove();
     }
+  });
+});
+
+describe("editing slots", () => {
+  it("exposes every editable slot as a hit target", () => {
+    make();
+    for (const slot of PET_SLOTS) {
+      expect(svg.querySelector(`[data-slot="${slot}"]`), `missing slot ${slot}`).not.toBeNull();
+    }
+  });
+
+  it("maps a click on part geometry to its slot", () => {
+    make();
+    const crownShape = svg.querySelector('[data-slot="crown"] *');
+    expect(crownShape).not.toBeNull();
+    // The editor reads the slot off the event, so a click anywhere inside the
+    // crown's geometry — not just on the group — has to resolve.
+    expect(PetRig.slotFromEvent({ target: crownShape } as unknown as Event)).toBe("crown");
+  });
+
+  it("returns null for a click on the background", () => {
+    make();
+    expect(PetRig.slotFromEvent({ target: svg } as unknown as Event)).toBeNull();
+  });
+
+  it("distinguishes face from head, though they share a joint", () => {
+    make();
+    const face = svg.querySelector('[data-slot="face"] *');
+    // The face rides inside the head JOINT so it animates with it, but it is
+    // its own slot — selecting a visor must not select the whole head.
+    expect(PetRig.slotFromEvent({ target: face } as unknown as Event)).toBe("face");
+  });
+
+  it("dims every other slot when one is selected", () => {
+    const r = make();
+    r.setSelection("head");
+    const dimmed = [...svg.querySelectorAll("[data-slot]")].filter((g) => g.hasAttribute("data-dim"));
+    const lit = [...svg.querySelectorAll("[data-slot]")].filter((g) => !g.hasAttribute("data-dim"));
+    expect(lit.every((g) => g.getAttribute("data-slot") === "head")).toBe(true);
+    expect(dimmed.length).toBeGreaterThan(0);
+  });
+
+  it("dims both arms together — they are one slot in two places", () => {
+    const r = make({ ...REFERENCE_PET, parts: { ...REFERENCE_PET.parts, arms: "stub" } });
+    r.setSelection("arms");
+    const arms = [...svg.querySelectorAll('[data-slot="arms"]')];
+    expect(arms.length).toBe(2);
+    expect(arms.every((g) => !g.hasAttribute("data-dim"))).toBe(true);
+  });
+
+  it("clears the dimming when nothing is selected", () => {
+    const r = make();
+    r.setSelection("head");
+    r.setSelection(null);
+    expect(svg.querySelector("[data-dim]")).toBeNull();
+  });
+
+  it("keeps the selection across an edit — the rebuild must not drop it", () => {
+    const r = make();
+    r.setSelection("crown");
+    // Editing IS setSpec, so losing the highlight on every change would make
+    // the editor unusable exactly while you are using it.
+    r.setSpec({ ...REFERENCE_PET, parts: { ...REFERENCE_PET.parts, crown: "horn" } });
+    const crown = svg.querySelector('[data-slot="crown"]');
+    expect(crown?.hasAttribute("data-dim")).toBe(false);
+    expect(svg.querySelector('[data-slot="head"]')?.hasAttribute("data-dim")).toBe(true);
+  });
+});
+
+describe("hit targets", () => {
+  it("resolves a click on an EYE to the face — the eyes are part of it", () => {
+    make();
+    const eye = svg.querySelector(".pet-eye rect");
+    expect(eye).not.toBeNull();
+    expect(PetRig.slotFromEvent({ target: eye } as unknown as Event)).toBe("face");
+  });
+
+  it("makes invisible decoration non-interactive", () => {
+    make();
+    // .pet-squint is a full-face rect at opacity 0. Left interactive it swallows
+    // every click on the face and the editor silently selects nothing.
+    const css = svg.querySelector("style")?.textContent ?? "";
+    expect(css).toMatch(/\.pet-squint[^{]*\{[^}]*pointer-events:\s*none/);
+    for (const cls of ["pet-shadow", "pet-zzz", "pet-glow"]) {
+      expect(css, cls).toContain(cls);
+    }
+  });
+
+  it("keeps decoration non-interactive under reduced motion too", () => {
+    make(REFERENCE_PET, { reducedMotion: true });
+    const css = svg.querySelector("style")?.textContent ?? "";
+    expect(css).toMatch(/pointer-events:\s*none/);
   });
 });

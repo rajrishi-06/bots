@@ -9,6 +9,7 @@ import { getSession } from "@/lib/session";
  *
  * POST   { prompt }            → generate a spec (not saved)
  * POST   { spec, name }        → save it to the collection
+ * POST   { spec, name, petId } → overwrite an existing pet (the editor)
  * PATCH  { petId }             → make it the active one
  */
 
@@ -31,7 +32,7 @@ async function scoped<T>(botId: string, fn: (tx: postgres.TransactionSql) => Pro
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const body = (await request.json()) as { prompt?: string; spec?: unknown; name?: string };
+  const body = (await request.json()) as { prompt?: string; spec?: unknown; name?: string; petId?: string };
 
   // Generate. Returns the spec WITHOUT saving, so the designer can preview and
   // re-roll without filling the collection with rejects.
@@ -58,6 +59,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       { error: "Palette is not legible.", issues: verdict.issues },
       { status: 400 },
     );
+  }
+
+  // Overwrite an existing pet — the editor saving over what it opened.
+  // `created_from_prompt` is deliberately untouched: it records where the pet
+  // came from, and hand-editing it later does not change that history.
+  if (body.petId) {
+    const updated = await scoped(id, (tx) =>
+      tx<{ id: string }[]>`
+        UPDATE pets SET name = ${body.name ?? parsed.data.name},
+                        spec = ${tx.json(parsed.data as never)}
+        WHERE id = ${body.petId!} AND bot_id = ${id}
+        RETURNING id`,
+    );
+    if (updated.length === 0) return NextResponse.json({ error: "No such pet." }, { status: 404 });
+    return NextResponse.json({ petId: updated[0]!.id });
   }
 
   const rows = await scoped(id, (tx) =>

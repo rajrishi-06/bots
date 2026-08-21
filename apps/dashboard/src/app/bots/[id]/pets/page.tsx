@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card } from "@/components/Shell";
 import { LivePet } from "@/components/LivePet";
 import { PetActivator } from "@/components/PetActivator";
@@ -12,7 +13,11 @@ export default async function PetsPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <Card title="Design a pet" description="Describe one in a sentence; the parts and palette are chosen for you.">
+      <Card
+        title="Design a pet"
+        description="Describe one in a sentence; the parts and palette are chosen for you."
+        actions={<Link className="btn" href={`/bots/${id}/studio`}>Open studio</Link>}
+      >
         <PetDesigner botId={id} />
       </Card>
 
@@ -33,7 +38,12 @@ export default async function PetsPage({ params }: { params: Promise<{ id: strin
               <div className="pet-cell" key={p.id} data-active={p.isActive}>
                 <LivePet spec={p.spec} />
                 <span className="pet-name">{p.name}</span>
-                <PetActivator botId={id} petId={p.id} isActive={p.isActive} />
+                <div className="pet-cell-actions">
+                  <PetActivator botId={id} petId={p.id} isActive={p.isActive} />
+                  {/* Generation gives a starting point; this is where it becomes
+                      yours. Editing opens the saved spec rather than re-rolling. */}
+                  <Link className="btn" href={`/bots/${id}/studio?pet=${p.id}`}>Edit</Link>
+                </div>
                 {p.createdFromPrompt && (
                   <span className="muted small">“{p.createdFromPrompt}”</span>
                 )}

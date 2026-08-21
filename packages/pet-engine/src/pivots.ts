@@ -77,3 +77,13 @@ export const SKELETON_SCALE = {
   longBody: { head: 0.9, torso: 1.2, limb: 1.1 },
   stout: { head: 1.06, torso: 1.08, limb: 0.82 },
 } as const;
+
+/**
+ * The editable slots, in the order the editor lists them — crown to feet, the
+ * way you would describe a creature out loud.
+ *
+ * Distinct from JOINTS: a joint is an animation group (the head carries the
+ * face), a slot is something a person selects and changes.
+ */
+export const PET_SLOTS = ["crown", "head", "face", "torso", "arms", "feet"] as const;
+export type PetSlot = (typeof PET_SLOTS)[number];
