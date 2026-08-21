@@ -1,0 +1,23 @@
+# Local dev only. Production is RDS Postgres 16 + ElastiCache, provisioned by CDK.
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: bots
+      POSTGRES_PASSWORD: bots
+      POSTGRES_DB: bots
+    # 5433 so it never collides with a local Postgres on 5432.
+    ports: ["5433:5432"]
+    volumes: ["bots-pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bots -d bots"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6380:6379"]
+
+volumes:
+  bots-pgdata:
