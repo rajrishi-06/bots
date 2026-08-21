@@ -1,4 +1,5 @@
 import { REFERENCE_PET, petSpecSchema } from "@bots/core/pet";
+import { actionsSchema, appearanceSchema, usableActions } from "@bots/core/widget";
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Sql } from "postgres";
@@ -32,12 +33,21 @@ export function registerConfig(app: FastifyInstance, { sql }: { sql: Sql }): voi
     const parsed = petSpecSchema.safeParse(pets[0]?.spec);
     const pet = parsed.success ? parsed.data : REFERENCE_PET;
 
+    // Parsed with defaults rather than passed through: a row written before a
+    // field existed, or hand-edited, must not reach the widget malformed.
+    const appearance = appearanceSchema.safeParse(bot.appearance ?? {});
+    const actions = actionsSchema.safeParse(bot.actions ?? []);
+
     const config = {
       name: bot.name,
       pet,
       greeting: `Hi — ask me anything about ${bot.name}.`,
       suggestedPrompts: bot.suggested_prompts,
       groundingMode: bot.grounding_mode,
+      appearance: appearance.success ? appearance.data : appearanceSchema.parse({}),
+      // Unsafe links are dropped here too, not only in the widget — the widget
+      // is the last line, not the only one.
+      actions: actions.success ? usableActions(actions.data) : [],
     };
 
     const etag = `W/"${createHash("sha1").update(JSON.stringify(config)).digest("base64url")}"`;

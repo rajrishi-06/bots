@@ -33,6 +33,20 @@ const Hex = z
  *  them — because fixed pivots are what let one running rig swap its geometry. */
 export const SKELETONS = ["balanced", "bigHead", "longBody", "stout"] as const;
 
+/**
+ * Visual family.
+ *
+ * A theme swaps the GEOMETRY behind each slot, not the slots themselves — the
+ * pivots stay fixed, so a pixel head hangs off the same neck as a robot one and
+ * switching theme is still a hot-swap rather than a remount.
+ *
+ * Each theme only overrides the parts that define its silhouette and inherits
+ * the rest, which is what keeps adding a sixth theme cheap instead of a
+ * combinatorial rewrite of the whole library.
+ */
+export const THEMES = ["robot", "pixel", "animal", "ghost", "mech"] as const;
+export type Theme = (typeof THEMES)[number];
+
 export const PART_OPTIONS = {
   crown: ["antenna", "ears", "horn", "fin", "none"],
   head: ["round", "boxy", "blob", "cat"],
@@ -77,6 +91,9 @@ export const petPersonalitySchema = z.object({
 export const petSpecSchema = z.object({
   v: z.literal(1),
   name: z.string().min(1).max(48),
+  // Defaulted, not required: every spec written before themes existed is still
+  // valid, and a stored pet must never stop parsing because the schema grew.
+  theme: z.enum(THEMES).default("robot"),
   skeleton: z.enum(SKELETONS),
   parts: petPartsSchema,
   palette: petPaletteSchema,
@@ -93,6 +110,7 @@ export type PetSpec = z.infer<typeof petSpecSchema>;
 export const REFERENCE_PET: PetSpec = {
   v: 1,
   name: "Terminal",
+  theme: "robot",
   skeleton: "balanced",
   parts: { crown: "antenna", head: "round", torso: "capsule", arms: "stub", feet: "pads", face: "visor" },
   palette: {

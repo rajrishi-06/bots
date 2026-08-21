@@ -104,6 +104,10 @@ export const bots = pgTable(
     allowedOrigins: text("allowed_origins").array().notNull().default(sql`'{}'::text[]`),
     monthlyMessageQuota: integer("monthly_message_quota").notNull().default(2000),
     suggestedPrompts: text("suggested_prompts").array().notNull().default(sql`'{}'::text[]`),
+    /** Widget look, from a closed set of choices — never free-form CSS. */
+    appearance: jsonb("appearance").notNull().default(sql`'{}'::jsonb`),
+    /** Up to four owner-defined quick actions. Links are https-only. */
+    actions: jsonb("actions").notNull().default(sql`'[]'::jsonb`),
     createdAt: createdAt(),
   },
   (t) => [

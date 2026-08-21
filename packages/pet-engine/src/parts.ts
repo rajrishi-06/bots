@@ -1,4 +1,4 @@
-import type { PetParts } from "@bots/core/pet";
+import type { PetParts, Theme } from "@bots/core/pet";
 
 /**
  * The vetted parts library.
@@ -21,6 +21,7 @@ export interface PartContext {
   g: (name: string) => string;
   lit: string;
   plateLo: string;
+  visorHi: string;
   visorLo: string;
 }
 
@@ -157,10 +158,18 @@ export function resolveParts(parts: PetParts): PetParts {
   return parts;
 }
 
-/** Ear plates flanking the head. Skipped when the crown already occupies the
- *  silhouette's sides, so a cat does not grow a second pair of ears. */
-export const headSidePlates = (c: PartContext, parts: PetParts): string =>
-  parts.crown === "ears" || parts.head === "cat"
+/**
+ * Ear plates flanking the head.
+ *
+ * Machine furniture, so only the machine themes get them — a wisp of a ghost
+ * with bolted-on ear nubs reads as a rendering bug, not a design. Also skipped
+ * when the crown or head already occupies the silhouette's sides, so a cat does
+ * not grow a second pair of ears.
+ */
+export const headSidePlates = (c: PartContext, parts: PetParts, theme: Theme): string =>
+  theme !== "robot" && theme !== "mech"
+    ? ""
+    : parts.crown === "ears" || parts.head === "cat"
     ? ""
     : `
       <rect x="5" y="25.5" width="6" height="11" rx="3" fill="${c.g("plate")}"/>
@@ -182,3 +191,238 @@ export const eye = (c: PartContext, cx: number): string => `
     <rect class="pet-eye-closed" x="${cx - 2.9}" y="25.8" width="5.8" height="1.7" rx="0.85" fill="${c.lit}" opacity="0"/>
     <path class="pet-eye-arc" d="M${cx - 3.1} 24.9 q3.1 4 6.2 0" stroke="${c.lit}" stroke-width="1.9" stroke-linecap="round" fill="none" opacity="0"/>
   </g>`;
+
+
+/* ── Themes ────────────────────────────────────────────────────────────────
+   A theme overrides only the parts that define its silhouette and inherits the
+   rest from the robot set. That is what keeps a sixth theme cheap rather than a
+   combinatorial rewrite — and every shape is still authored to the same fixed
+   pivots, so switching theme remains a hot-swap. */
+
+type SlotOverrides = {
+  head?: Partial<Record<PetParts["head"], Part>>;
+  torso?: Partial<Record<PetParts["torso"], Part>>;
+  face?: Partial<Record<PetParts["face"], Part>>;
+  feet?: Partial<Record<PetParts["feet"], Part>>;
+  crown?: Partial<Record<PetParts["crown"], Part>>;
+  /** Drawn over the torso. `null` removes the robot's terminal panel. */
+  chest?: Part | null;
+};
+
+/** Blocky and stepped. Nothing curves; radii are 0 and edges are quantised. */
+const pixel: SlotOverrides = {
+  head: {
+    round: (c) => `
+      <rect x="12" y="12" width="48" height="28" fill="${c.g("shell")}"/>
+      <rect x="8" y="16" width="4" height="20" fill="${c.g("shell")}"/>
+      <rect x="60" y="16" width="4" height="20" fill="${c.g("shell")}"/>
+      <rect x="12" y="12" width="48" height="4" fill="#FFF" fill-opacity="0.18"/>`,
+    boxy: (c) => `
+      <rect x="10" y="11" width="52" height="30" fill="${c.g("shell")}"/>
+      <rect x="10" y="11" width="52" height="4" fill="#FFF" fill-opacity="0.18"/>`,
+    blob: (c) => `
+      <rect x="14" y="10" width="44" height="32" fill="${c.g("shell")}"/>
+      <rect x="10" y="14" width="4" height="24" fill="${c.g("shell")}"/>
+      <rect x="58" y="14" width="4" height="24" fill="${c.g("shell")}"/>`,
+    cat: (c) => `
+      <rect x="12" y="14" width="48" height="27" fill="${c.g("shell")}"/>
+      <rect x="14" y="6" width="8" height="8" fill="${c.g("shell")}"/>
+      <rect x="50" y="6" width="8" height="8" fill="${c.g("shell")}"/>
+      <rect x="16" y="9" width="4" height="4" fill="${c.plateLo}"/>
+      <rect x="52" y="9" width="4" height="4" fill="${c.plateLo}"/>`,
+  },
+  torso: {
+    capsule: (c) => `
+      <rect x="32" y="39" width="8" height="6" fill="${c.plateLo}"/>
+      <rect x="19" y="43" width="34" height="22" fill="${c.g("shell")}"/>
+      <rect x="19" y="43" width="34" height="3" fill="#FFF" fill-opacity="0.16"/>`,
+    boxy: (c) => `
+      <rect x="32" y="39" width="8" height="6" fill="${c.plateLo}"/>
+      <rect x="18" y="43" width="36" height="22" fill="${c.g("shell")}"/>`,
+    egg: (c) => `
+      <rect x="32" y="39" width="8" height="6" fill="${c.plateLo}"/>
+      <rect x="21" y="43" width="30" height="22" fill="${c.g("shell")}"/>
+      <rect x="18" y="47" width="3" height="14" fill="${c.g("shell")}"/>
+      <rect x="51" y="47" width="3" height="14" fill="${c.g("shell")}"/>`,
+  },
+  face: {
+    visor: (c) => `<rect x="17" y="18" width="38" height="17" fill="${c.g("visor")}"/>`,
+    eyes: (c) => `
+      <rect x="21" y="20" width="13" height="13" fill="${c.g("visor")}"/>
+      <rect x="38" y="20" width="13" height="13" fill="${c.g("visor")}"/>`,
+    goggles: (c) => `
+      <rect x="13" y="24" width="46" height="4" fill="${c.plateLo}"/>
+      <rect x="19" y="18" width="17" height="17" fill="${c.g("visor")}"/>
+      <rect x="36" y="18" width="17" height="17" fill="${c.g("visor")}"/>`,
+  },
+  feet: {
+    pads: (c) => `
+      <rect x="22" y="61" width="11" height="7" fill="${c.g("plate")}"/>
+      <rect x="39" y="61" width="11" height="7" fill="${c.g("plate")}"/>`,
+    paws: (c) => `
+      <rect x="21" y="61" width="12" height="7" fill="${c.g("plate")}"/>
+      <rect x="39" y="61" width="12" height="7" fill="${c.g("plate")}"/>
+      <rect x="23" y="63" width="2" height="2" fill="${c.visorLo}" fill-opacity="0.45"/>
+      <rect x="27" y="63" width="2" height="2" fill="${c.visorLo}" fill-opacity="0.45"/>
+      <rect x="41" y="63" width="2" height="2" fill="${c.visorLo}" fill-opacity="0.45"/>
+      <rect x="45" y="63" width="2" height="2" fill="${c.visorLo}" fill-opacity="0.45"/>`,
+  },
+  crown: {
+    antenna: (c) => `
+      <rect x="34.5" y="4" width="3" height="9" fill="${c.plateLo}"/>
+      <rect class="pet-glow" x="31" y="0" width="10" height="6" fill="${c.g("lit")}" opacity="0.5"/>
+      <rect x="33" y="1" width="6" height="4" fill="${c.lit}"/>`,
+    horn: (c) => `<rect x="33" y="4" width="6" height="9" fill="${c.g("plate")}"/>
+      <rect x="34.5" y="1" width="3" height="3" fill="${c.lit}"/>`,
+    ears: (c) => `
+      <rect x="17" y="5" width="9" height="9" fill="${c.g("shell")}"/>
+      <rect x="46" y="5" width="9" height="9" fill="${c.g("shell")}"/>`,
+    fin: (c) => `
+      <rect x="33" y="2" width="6" height="12" fill="${c.g("shell")}"/>
+      <rect x="28" y="7" width="5" height="7" fill="${c.g("shell")}"/>
+      <rect x="39" y="7" width="5" height="7" fill="${c.g("shell")}"/>`,
+  },
+  chest: (c) => `
+    <rect x="26" y="49" width="20" height="10" fill="${c.g("visor")}"/>
+    <rect x="29" y="52" width="3" height="3" fill="${c.lit}"/>
+    <rect class="pet-cursor" x="35" y="55" width="6" height="2" fill="${c.lit}"/>`,
+};
+
+/** Soft and organic. Snouts, ear tufts, rounded haunches, no panels. */
+const animal: SlotOverrides = {
+  head: {
+    round: (c) => `
+      <ellipse cx="36" cy="27" rx="24" ry="16" fill="${c.g("shell")}"/>
+      <ellipse cx="36" cy="33" rx="11" ry="7" fill="${c.g("plate")}" opacity="0.75"/>
+      <ellipse cx="36" cy="30.5" rx="3" ry="2.2" fill="${c.visorHi}"/>`,
+    boxy: (c) => `
+      <path d="M14 20 Q14 11 36 11 Q58 11 58 20 L58 33 Q58 42 36 42 Q14 42 14 33 Z" fill="${c.g("shell")}"/>
+      <ellipse cx="36" cy="34" rx="10" ry="6" fill="${c.g("plate")}" opacity="0.7"/>`,
+    blob: (c) => `
+      <ellipse cx="36" cy="26.5" rx="25" ry="16.5" fill="${c.g("shell")}"/>
+      <ellipse cx="36" cy="34" rx="12" ry="7.5" fill="${c.g("plate")}" opacity="0.7"/>
+      <ellipse cx="36" cy="31" rx="3.4" ry="2.4" fill="${c.visorHi}"/>`,
+    cat: (c) => `
+      <ellipse cx="36" cy="27" rx="24" ry="16" fill="${c.g("shell")}"/>
+      <path d="M17 14 Q15 4 25 8 Q29 10 30 13 Z" fill="${c.g("shell")}"/>
+      <path d="M55 14 Q57 4 47 8 Q43 10 42 13 Z" fill="${c.g("shell")}"/>
+      <path d="M19 13 Q18 7 24 10 Z" fill="${c.plateLo}" opacity="0.5"/>
+      <path d="M53 13 Q54 7 48 10 Z" fill="${c.plateLo}" opacity="0.5"/>
+      <ellipse cx="36" cy="32" rx="3.2" ry="2.3" fill="${c.visorHi}"/>`,
+  },
+  torso: {
+    capsule: (c) => `
+      <ellipse cx="36" cy="53.5" rx="19" ry="12" fill="${c.g("shell")}"/>
+      <ellipse cx="36" cy="56" rx="11" ry="7" fill="${c.g("plate")}" opacity="0.5"/>`,
+    boxy: (c) => `
+      <path d="M18 46 Q18 42 36 42 Q54 42 54 46 L54 60 Q54 65 36 65 Q18 65 18 60 Z" fill="${c.g("shell")}"/>`,
+    egg: (c) => `
+      <ellipse cx="36" cy="54" rx="18" ry="12.5" fill="${c.g("shell")}"/>
+      <ellipse cx="36" cy="57" rx="10" ry="6.5" fill="${c.g("plate")}" opacity="0.5"/>`,
+  },
+  face: {
+    visor: (c) => `
+      <ellipse cx="27.6" cy="25" rx="6.5" ry="7" fill="${c.g("visor")}"/>
+      <ellipse cx="44.4" cy="25" rx="6.5" ry="7" fill="${c.g("visor")}"/>`,
+    eyes: (c) => `
+      <ellipse cx="27.6" cy="25" rx="7" ry="7.5" fill="${c.g("visor")}"/>
+      <ellipse cx="44.4" cy="25" rx="7" ry="7.5" fill="${c.g("visor")}"/>`,
+    goggles: (c) => `
+      <path d="M12 24 Q36 20 60 24" stroke="${c.plateLo}" stroke-width="3.5" fill="none"/>
+      <ellipse cx="27.6" cy="25.5" rx="8.5" ry="8" fill="${c.g("visor")}"/>
+      <ellipse cx="44.4" cy="25.5" rx="8.5" ry="8" fill="${c.g("visor")}"/>`,
+  },
+  feet: {
+    pads: (c) => `
+      <ellipse cx="27" cy="65" rx="7.5" ry="4.5" fill="${c.g("plate")}"/>
+      <ellipse cx="45" cy="65" rx="7.5" ry="4.5" fill="${c.g("plate")}"/>`,
+  },
+  chest: null,
+};
+
+/** No feet, a tapered wispy hem, translucent shell. */
+const ghost: SlotOverrides = {
+  head: {
+    round: (c) => `<path d="M36 9 C51 9 61 19 61 31 L61 40 Q57 34 53 40 Q49 34 45 40 Q41 34 36 40 Q31 34 27 40 Q23 34 19 40 Q15 34 11 40 L11 31 C11 19 21 9 36 9 Z" fill="${c.g("shell")}" opacity="0.92"/>`,
+    boxy: (c) => `<path d="M12 12 H60 V40 Q56 34 52 40 Q48 34 44 40 Q40 34 36 40 Q32 34 28 40 Q24 34 20 40 Q16 34 12 40 Z" fill="${c.g("shell")}" opacity="0.92"/>`,
+    blob: (c) => `<path d="M36 8 C53 8 63 20 63 32 L63 41 Q58 35 53 41 Q48 35 43 41 Q39 35 36 41 Q33 35 29 41 Q24 35 19 41 Q14 35 9 41 L9 32 C9 20 19 8 36 8 Z" fill="${c.g("shell")}" opacity="0.92"/>`,
+    cat: (c) => `<path d="M20 13 Q17 4 27 9 M52 13 Q55 4 45 9" stroke="${c.g("shell")}" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <path d="M36 10 C51 10 60 20 60 31 L60 40 Q55 34 50 40 Q45 34 40 40 Q36 34 32 40 Q27 34 22 40 Q17 34 12 40 L12 31 C12 20 21 10 36 10 Z" fill="${c.g("shell")}" opacity="0.92"/>`,
+  },
+  torso: {
+    capsule: (c) => `<path d="M20 44 Q20 42 36 42 Q52 42 52 44 L52 62 Q48 56 44 62 Q40 56 36 62 Q32 56 28 62 Q24 56 20 62 Z" fill="${c.g("shell")}" opacity="0.85"/>`,
+    boxy: (c) => `<path d="M19 43 H53 V62 Q49 56 45 62 Q41 56 36 62 Q31 56 27 62 Q23 56 19 62 Z" fill="${c.g("shell")}" opacity="0.85"/>`,
+    egg: (c) => `<path d="M36 42 Q53 42 53 54 L53 62 Q48 56 44 62 Q40 56 36 62 Q32 56 28 62 Q23 56 19 62 L19 54 Q19 42 36 42 Z" fill="${c.g("shell")}" opacity="0.85"/>`,
+  },
+  feet: { pads: () => "", paws: () => "", none: () => "" },
+  chest: null,
+};
+
+/** Angular, armoured, hard bevels and a jaw plate. */
+const mech: SlotOverrides = {
+  head: {
+    round: (c) => `
+      <path d="M14 16 L20 11 H52 L58 16 V33 L52 40 H20 L14 33 Z" fill="${c.g("shell")}"/>
+      <path d="M14 16 L20 11 H52 L58 16 Z" fill="#FFF" fill-opacity="0.14"/>
+      <path d="M24 40 H48 L44 44 H28 Z" fill="${c.g("plate")}"/>`,
+    boxy: (c) => `
+      <path d="M11 12 H61 V36 L55 41 H17 L11 36 Z" fill="${c.g("shell")}"/>
+      <rect x="11" y="12" width="50" height="3.5" fill="#FFF" fill-opacity="0.14"/>`,
+    blob: (c) => `
+      <path d="M12 22 L22 10 H50 L60 22 V32 L50 42 H22 L12 32 Z" fill="${c.g("shell")}"/>`,
+    cat: (c) => `
+      <path d="M14 16 L20 11 H52 L58 16 V33 L52 40 H20 L14 33 Z" fill="${c.g("shell")}"/>
+      <path d="M16 12 L14 3 L26 9 Z" fill="${c.g("plate")}"/>
+      <path d="M56 12 L58 3 L46 9 Z" fill="${c.g("plate")}"/>`,
+  },
+  torso: {
+    capsule: (c) => `
+      <rect x="31" y="38" width="10" height="7" fill="${c.plateLo}"/>
+      <path d="M18 46 L23 43 H49 L54 46 V60 L48 65 H24 L18 60 Z" fill="${c.g("shell")}"/>
+      <path d="M18 46 L23 43 H49 L54 46 Z" fill="#FFF" fill-opacity="0.14"/>`,
+    boxy: (c) => `
+      <rect x="31" y="38" width="10" height="7" fill="${c.plateLo}"/>
+      <path d="M18 43 H54 V61 L49 65 H23 L18 61 Z" fill="${c.g("shell")}"/>`,
+    egg: (c) => `
+      <rect x="31" y="38" width="10" height="7" fill="${c.plateLo}"/>
+      <path d="M20 48 L27 43 H45 L52 48 V59 L45 65 H27 L20 59 Z" fill="${c.g("shell")}"/>`,
+  },
+  face: {
+    visor: (c) => `
+      <path d="M16 19 L20 16 H52 L56 19 V33 L52 36 H20 L16 33 Z" fill="${c.g("visor")}"/>
+      <path d="M16 32 L56 20 V23 L16 35 Z" fill="#FFF" opacity="0.06"/>`,
+  },
+  feet: {
+    pads: (c) => `
+      <path d="M21 61 H34 L32 69 H23 Z" fill="${c.g("plate")}"/>
+      <path d="M38 61 H51 L49 69 H40 Z" fill="${c.g("plate")}"/>`,
+  },
+};
+
+const THEME_OVERRIDES: Record<Theme, SlotOverrides> = {
+  robot: {},
+  pixel,
+  animal,
+  ghost,
+  mech,
+};
+
+/** Resolve a slot's geometry for a theme, falling back to the robot library. */
+export function partFor<S extends keyof typeof PARTS>(
+  theme: Theme,
+  slot: S,
+  option: string,
+): Part {
+  const override = (THEME_OVERRIDES[theme] as Record<string, Record<string, Part> | undefined>)[slot];
+  return (
+    override?.[option] ??
+    ((PARTS[slot] as unknown as Record<string, Part>)[option] ?? (() => ""))
+  );
+}
+
+/** The chest panel for a theme. `null` means the theme has no chest furniture —
+ *  a terminal readout on an animal's belly reads as a mistake, not a feature. */
+export function chestFor(theme: Theme): Part | null {
+  const o = THEME_OVERRIDES[theme];
+  return o.chest === undefined ? chestPanel : o.chest;
+}

@@ -43,6 +43,8 @@ export interface BotRow {
   allowed_origins: string[];
   monthly_message_quota: number;
   suggested_prompts: string[];
+  appearance: unknown;
+  actions: unknown;
 }
 
 /**

@@ -17,6 +17,9 @@ const CONFIG = {
   groundingMode: "strict" as const,
 };
 
+// Deliberately WITHOUT appearance/actions: a widget cached on a CDN outlives API
+// versions, and an older config must degrade to defaults rather than crash.
+
 beforeEach(() => {
   vi.stubGlobal(
     "fetch",
@@ -102,5 +105,35 @@ describe("launcher position storage", () => {
     const p = loadLauncherPos(1000, 800);
     expect(p.x).toBeGreaterThan(800);
     expect(p.y).toBeGreaterThan(600);
+  });
+});
+
+describe("config normalisation", () => {
+  it("renders with a config that predates appearance and actions", async () => {
+    // CONFIG above has neither field — this is the compatibility case.
+    const unmount = await mount({ botKey: "pb_live_x", apiBase: "https://api.test" });
+    expect(document.body.childElementCount).toBe(1);
+    unmount();
+  });
+
+  it("drops an unsafe action rather than refusing to load", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            ...CONFIG,
+            actions: [
+              { id: "bad", label: "x", kind: "link", value: "javascript:alert(1)" },
+              { id: "ok", label: "Docs", kind: "link", value: "https://acme.test" },
+            ],
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const unmount = await mount({ botKey: "pb_live_x", apiBase: "https://api.test" });
+    expect(document.body.childElementCount).toBe(1);
+    unmount();
   });
 });

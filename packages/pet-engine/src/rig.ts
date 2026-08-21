@@ -1,14 +1,16 @@
 import type { PetSpec } from "@bots/core/pet";
 import { DOZE_AFTER_MS, FULL_TILT_SPEED, PIVOT, SKELETON_SCALE, TIER } from "./pivots.js";
-import { PARTS, chestPanel, eye, headSidePlates, resolveParts, type PartContext } from "./parts.js";
+import { PARTS, chestFor, eye, headSidePlates, partFor, resolveParts, type PartContext } from "./parts.js";
 import {
   MotionValue,
+  Oscillator,
   Spring,
   bindAttribute,
   clamp,
   template,
   transform,
   type Unsubscribe,
+  ticker,
   type Value,
 } from "./spring.js";
 
@@ -43,7 +45,7 @@ type Mood = "open" | "closed" | "arc";
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 /** Joint groups, in paint order. Fixed — see pivots.ts. */
-const JOINTS = ["shadow", "root", "crown", "armL", "armR", "feet", "torso", "head", "gaze"] as const;
+const JOINTS = ["shadow", "breath", "root", "crown", "armL", "armR", "feet", "torso", "head", "gaze"] as const;
 type Joint = (typeof JOINTS)[number];
 
 export class PetRig {
@@ -62,6 +64,8 @@ export class PetRig {
   #gazeYTo = new MotionValue(0);
 
   #springs: Spring[] = [];
+  #breath!: Oscillator;
+  #glow!: Oscillator;
   #bindings: Unsubscribe[] = [];
   #timers: ReturnType<typeof setTimeout>[] = [];
   #cleanups: Unsubscribe[] = [];
@@ -87,6 +91,46 @@ export class PetRig {
     this.#build();
     this.#wireSprings();
     this.#startIdleBehaviours();
+    this.#attachGlobalListeners();
+  }
+
+  /**
+   * The rig watches the page itself.
+   *
+   * This used to be the caller's job — `setPointer` was public and every host
+   * had to remember to feed it. The widget did not, so its pets never tracked
+   * the cursor and, with nothing rousing them, dozed off after fifteen seconds
+   * and stayed asleep. The pet looked dead on the one surface that matters most.
+   *
+   * A responsibility every caller must remember is a responsibility in the wrong
+   * place. `setPointer` stays public for hosts with their own pointer pipeline
+   * (the desktop shell reports screen coordinates), but nobody has to use it.
+   */
+  #attachGlobalListeners(): void {
+    if (typeof window === "undefined") return;
+
+    if (this.#opts.gaze && !this.#opts.reducedMotion) {
+      let frame = 0;
+      const onMove = (e: PointerEvent) => {
+        // One sample per frame is plenty for three pixels of eye travel.
+        if (frame) return;
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          this.setPointer(e.clientX, e.clientY);
+        });
+      };
+      window.addEventListener("pointermove", onMove, { passive: true });
+      this.#cleanups.push(() => {
+        window.removeEventListener("pointermove", onMove);
+        if (frame) cancelAnimationFrame(frame);
+      });
+    }
+
+    // A hidden tab should not be running springs. rAF throttling in background
+    // tabs is inconsistent enough that a pet nobody can see still burns CPU.
+    const onVisibility = () => ticker.setPaused(document.hidden);
+    document.addEventListener("visibilitychange", onVisibility);
+    this.#cleanups.push(() => document.removeEventListener("visibilitychange", onVisibility));
   }
 
   /* ── Public API ─────────────────────────────────────────────────────────── */
@@ -99,7 +143,12 @@ export class PetRig {
     this.#rouse();
   }
 
-  /** Viewport coordinates of the pointer. The eyes track it. */
+  /**
+   * Viewport coordinates of the pointer. The eyes track it.
+   *
+   * Called automatically from a window listener — see `#attachGlobalListeners`.
+   * Public for hosts with their own pointer pipeline, like the desktop shell.
+   */
   setPointer(clientX: number, clientY: number): void {
     if (this.#opts.reducedMotion || !this.#opts.gaze) return;
     const box = this.#svg.getBoundingClientRect();
@@ -141,6 +190,8 @@ export class PetRig {
 
   destroy(): void {
     this.#destroyed = true;
+    this.#breath?.destroy();
+    this.#glow?.destroy();
     for (const t of this.#timers) clearTimeout(t);
     for (const c of this.#cleanups) c();
     for (const b of this.#bindings) b();
@@ -160,6 +211,7 @@ export class PetRig {
       g: (name) => `url(#${this.#uid}-${name})`,
       lit: p.lit,
       plateLo: p.plateLo,
+      visorHi: p.visorHi,
       visorLo: p.visorLo,
     };
   }
@@ -168,6 +220,8 @@ export class PetRig {
     const c = this.#context();
     const parts = resolveParts(this.#spec.parts);
     const { palette } = this.#spec;
+    const theme = this.#spec.theme;
+    const chest = chestFor(theme);
     const scale = SKELETON_SCALE[this.#spec.skeleton];
     const s = (v: number) => `scale(${v})`;
     // Scale about each joint's own pivot, so proportion changes never shift it.
@@ -203,14 +257,14 @@ export class PetRig {
         <ellipse class="pet-shadow" cx="36" cy="70.5" rx="16" ry="3" fill="${c.g("shadow")}"/>
       </g>
 
-      <g class="pet-breathe">
+      <g data-joint="breath">
         <g data-joint="root">
           <g class="pet-zzz" opacity="0">
             <path d="M52 3 h5 l-5 6.4 h5" stroke="${palette.lit}" stroke-width="1.5"
                   stroke-linecap="round" stroke-linejoin="round" fill="none"/>
           </g>
 
-          <g data-joint="crown">${PARTS.crown[parts.crown](c)}</g>
+          <g data-joint="crown">${partFor(theme, "crown", parts.crown)(c)}</g>
 
           <g transform="${about(PIVOT.armL, scale.limb)}">
             <g data-joint="armL">${PARTS.arms[parts.arms].left(c)}</g>
@@ -218,20 +272,20 @@ export class PetRig {
           <g transform="${about(PIVOT.armR, scale.limb)}">
             <g data-joint="armR">${PARTS.arms[parts.arms].right(c)}</g>
           </g>
-          <g data-joint="feet">${PARTS.feet[parts.feet](c)}</g>
+          <g data-joint="feet">${partFor(theme, "feet", parts.feet)(c)}</g>
 
           <g transform="${about(PIVOT.torso, scale.torso)}">
             <g data-joint="torso">
-              ${PARTS.torso[parts.torso](c)}
-              ${chestPanel(c)}
+              ${partFor(theme, "torso", parts.torso)(c)}
+              ${chest ? chest(c) : ""}
             </g>
           </g>
 
           <g transform="${about(PIVOT.head, scale.head)}">
             <g data-joint="head">
-              ${headSidePlates(c, parts)}
-              ${PARTS.head[parts.head](c)}
-              ${PARTS.face[parts.face](c)}
+              ${headSidePlates(c, parts, theme)}
+              ${partFor(theme, "head", parts.head)(c)}
+              ${partFor(theme, "face", parts.face)(c)}
               <g clip-path="${c.g("faceclip")}">
                 <g data-joint="gaze">${eye(c, 27.6)}${eye(c, 44.4)}</g>
               </g>
@@ -267,24 +321,20 @@ export class PetRig {
    * `energy` sets the tempo: a sleepy pet breathes slowly and a twitchy one fast.
    */
   #styles(): string {
-    const e = this.#spec.personality.energy;
-    const breathe = (5.6 - e * 2.6).toFixed(2); // 5.6s at energy 0 → 3.0s at 1
-    const amplitude = (1.2 + e * 1.1).toFixed(2);
     if (this.#opts.reducedMotion) {
-      return `.pet-breathe,.pet-glow,.pet-cursor,.pet-zzz{animation:none}
-      @media (prefers-reduced-motion: reduce){.pet-breathe,.pet-glow,.pet-cursor,.pet-zzz{animation:none}}`;
+      return `.pet-cursor,.pet-zzz{animation:none}
+      @media (prefers-reduced-motion: reduce){.pet-cursor,.pet-zzz{animation:none}}`;
     }
+    // ONLY opacity animates in CSS. Breathing and the glow moved to the ticker,
+    // because CSS `transform` on an SVG element is the least reliable corner of
+    // CSS animation — Safari especially — and idle motion that works on one
+    // browser is worse than idle motion that works on all of them.
     return `
-      .pet-breathe{animation:${this.#uid}-b ${breathe}s ease-in-out infinite}
-      @keyframes ${this.#uid}-b{0%,100%{transform:translateY(0)}50%{transform:translateY(-${amplitude}px)}}
-      .pet-glow{animation:${this.#uid}-g ${(4.4 - e * 2.2).toFixed(2)}s ease-in-out infinite}
-      @keyframes ${this.#uid}-g{0%,100%{opacity:.34}50%{opacity:.72}}
       .pet-cursor{animation:${this.#uid}-c 1.1s steps(1) infinite}
       @keyframes ${this.#uid}-c{0%,50%{opacity:1}50.01%,100%{opacity:0}}
       .pet-zzz{animation:${this.#uid}-z 2.8s ease-out infinite}
-      @keyframes ${this.#uid}-z{0%{opacity:0;transform:translateY(1px)}40%{opacity:.55}100%{opacity:0;transform:translateY(-11px)}}
-      [data-asleep="true"] .pet-breathe{animation-duration:${(Number(breathe) * 1.6).toFixed(2)}s}
-      @media (prefers-reduced-motion: reduce){.pet-breathe,.pet-glow,.pet-cursor,.pet-zzz{animation:none}}
+      @keyframes ${this.#uid}-z{0%{opacity:0}40%{opacity:.55}100%{opacity:0}}
+      @media (prefers-reduced-motion: reduce){.pet-cursor,.pet-zzz{animation:none}}
     `;
   }
 
@@ -304,6 +354,18 @@ export class PetRig {
   }
 
   #wireSprings(): void {
+    // Idle rhythm, on the same clock as everything else and written to the
+    // transform ATTRIBUTE — see Oscillator for why this is not CSS.
+    //
+    // Amplitude 0 under reduced motion rather than skipping construction: the
+    // transform chain and every binding stay identical, so there is one code
+    // path instead of two, and `jump(0)` on the springs does not silently miss
+    // the oscillators the way it did when they were created unconditionally.
+    const e = this.#spec.personality.energy;
+    const still = this.#opts.reducedMotion;
+    this.#breath = new Oscillator(5.6 - e * 2.6, still ? 0 : 1.2 + e * 1.1);
+    this.#glow = new Oscillator(4.4 - e * 2.2, still ? 0 : 1);
+
     const lead = this.#spring(this.#nx, "lead");
     const leadY = this.#spring(this.#ny, "lead");
     const core = this.#spring(this.#nx, "core");
@@ -341,14 +403,18 @@ export class PetRig {
       // The gaze LEADS the drag; pointer-follow rides on top of it.
       gaze: template`translate(${t([lead, gazeX], ([l, p]) => clamp(l! * 2.5 + p! * 2.6, -3.2, 3.2))} ${t([leadY, gazeY], ([l, p]) => clamp(l! * 1.6 + p! * 1.8, -2.2, 2.2))})`,
       shadow: template`translate(${PIVOT.shadow[0]} ${PIVOT.shadow[1]}) scale(${t([lift, land], ([l, d]) => 1 - l! * 0.3 + d! * 0.1)} 1) translate(${-PIVOT.shadow[0]} ${-PIVOT.shadow[1]})`,
+      // A pure translate, so it composes cleanly with every rotation below it.
+      breath: template`translate(0 ${t([this.#breath], ([b]) => -b!)})`,
     };
 
     this.#shadowOpacity = t([lift, land], ([l, d]) => 0.9 - l! * 0.5 + d! * 0.1);
+    this.#glowOpacity = t([this.#glow], ([g]) => 0.34 + g! * 0.38);
     this.#rebind();
   }
 
   #transforms!: Record<Joint, Value<string>>;
   #shadowOpacity!: Value<number>;
+  #glowOpacity!: Value<number>;
 
   /** Re-attach bindings after a rebuild. The springs are untouched. */
   #rebind(): void {
@@ -358,6 +424,11 @@ export class PetRig {
       const el = this.#groups.get(joint);
       const value = this.#transforms[joint];
       if (el && value) this.#bindings.push(bindAttribute(el, "transform", value));
+    }
+    for (const el of this.#svg.querySelectorAll<SVGElement>(".pet-glow")) {
+      const apply = (v: number) => el.setAttribute("opacity", String(Math.round(v * 100) / 100));
+      apply(this.#glowOpacity.get());
+      this.#bindings.push(this.#glowOpacity.on(apply));
     }
     const shadow = this.#svg.querySelector<SVGElement>(".pet-shadow");
     if (shadow) {

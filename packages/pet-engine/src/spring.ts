@@ -65,31 +65,62 @@ const MAX_DT = 1 / 30;
  * The shared clock. Springs register while moving and unregister at rest, so an
  * idle page runs no animation frames at all.
  */
+/** Anything the ticker can advance. */
+interface Steppable {
+  step(dt: number): void;
+}
+
 class Ticker {
-  #active = new Set<Spring>();
+  #active = new Set<Steppable>();
+  /** Registered for the object's lifetime rather than until it comes to rest. */
+  #persistent = new Set<Steppable>();
   #frame: number | null = null;
   #last = 0;
   /** Swapped out in tests for a manual clock. */
   raf: ((cb: (t: number) => void) => number) | null =
     typeof requestAnimationFrame === "function" ? requestAnimationFrame.bind(globalThis) : null;
 
-  add(s: Spring): void {
+  add(s: Steppable): void {
     this.#active.add(s);
-    if (this.#frame === null && this.raf) {
+    this.#wake();
+  }
+
+  /** For oscillators: they never reach rest, so they never unregister themselves. */
+  addPersistent(s: Steppable): void {
+    this.#persistent.add(s);
+    this.#wake();
+  }
+
+  remove(s: Steppable): void {
+    this.#active.delete(s);
+    this.#persistent.delete(s);
+  }
+
+  #wake(): void {
+    if (this.#frame === null && this.raf && !this.#paused) {
       this.#last = performance.now();
       this.#frame = this.raf(this.#tick);
     }
   }
 
-  remove(s: Spring): void {
-    this.#active.delete(s);
+  #paused = false;
+
+  /**
+   * Stop the clock entirely. Bound to document visibility by the rig: a
+   * backgrounded tab should not be running springs, and rAF throttling there is
+   * unreliable enough that a hidden pet can otherwise eat real CPU.
+   */
+  setPaused(paused: boolean): void {
+    this.#paused = paused;
+    if (!paused) this.#wake();
   }
 
   #tick = (now: number): void => {
     const dt = (now - this.#last) / 1000;
     this.#last = now;
     this.step(dt);
-    this.#frame = this.#active.size > 0 && this.raf ? this.raf(this.#tick) : null;
+    const running = this.#active.size > 0 || this.#persistent.size > 0;
+    this.#frame = running && this.raf && !this.#paused ? this.raf(this.#tick) : null;
   };
 
   /**
@@ -103,8 +134,11 @@ class Ticker {
   step(dt: number): void {
     const clamped = Math.min(dt, MAX_DT);
     for (const s of [...this.#active]) s.step(clamped);
+    for (const s of [...this.#persistent]) s.step(clamped);
   }
 
+  /** Springs currently in flight. Oscillators are excluded — they never rest,
+   *  and counting them would make "is anything still moving?" always true. */
   get activeCount(): number {
     return this.#active.size;
   }
@@ -113,6 +147,8 @@ class Ticker {
    *  left mid-flight by one test would otherwise be counted by the next. */
   reset(): void {
     this.#active.clear();
+    this.#persistent.clear();
+    this.#paused = false;
     this.#frame = null;
   }
 }
@@ -196,6 +232,63 @@ export class Spring implements Value<number> {
 
   destroy(): void {
     this.#unsubscribe();
+    this.#listeners.clear();
+    ticker.remove(this);
+  }
+}
+
+/**
+ * A free-running sine oscillator, for motion that never settles — breathing,
+ * a pulsing glow.
+ *
+ * Springs chase a target and then sleep, which is exactly wrong for a rhythm.
+ * This registers with the same ticker so idle motion composes with velocity
+ * motion in one clock rather than a second animation system.
+ *
+ * It is deliberately NOT CSS. `transform` on an SVG element is the shakiest
+ * corner of CSS animation support — Safari in particular — and the rig already
+ * writes the transform ATTRIBUTE for every joint, which works everywhere. Idle
+ * motion that only breathes on Chrome is worse than none.
+ */
+export class Oscillator implements Value<number> {
+  #phase = 0;
+  #current = 0;
+  #listeners = new Set<(v: number) => void>();
+  #period: number;
+  #amplitude: number;
+
+  constructor(periodSeconds: number, amplitude: number) {
+    this.#period = periodSeconds;
+    this.#amplitude = amplitude;
+    ticker.addPersistent(this);
+  }
+
+  /** Retune without restarting — phase is preserved, so it does not jump. */
+  set(periodSeconds: number, amplitude: number): void {
+    this.#period = periodSeconds;
+    this.#amplitude = amplitude;
+  }
+
+  get(): number {
+    return this.#current;
+  }
+
+  on(listener: (v: number) => void): Unsubscribe {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+
+  step(dt: number): void {
+    this.#phase = (this.#phase + dt / this.#period) % 1;
+    // -cos rather than sin so it starts at the bottom of the breath (0) and
+    // rises — starting mid-inhale reads as a twitch on mount.
+    const next = ((1 - Math.cos(this.#phase * Math.PI * 2)) / 2) * this.#amplitude;
+    if (next === this.#current) return;
+    this.#current = next;
+    for (const l of this.#listeners) l(next);
+  }
+
+  destroy(): void {
     this.#listeners.clear();
     ticker.remove(this);
   }

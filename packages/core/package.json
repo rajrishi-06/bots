@@ -8,7 +8,9 @@
     "./pet": "./src/pet/index.ts",
     "./models": "./src/models/index.ts",
     "./rag": "./src/rag/index.ts",
-    "./contrast": "./src/contrast.ts"
+    "./contrast": "./src/contrast.ts",
+    "./widget": "./src/widget/index.ts",
+    "./widget/defaults": "./src/widget/defaults.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

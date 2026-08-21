@@ -1,5 +1,6 @@
 import "server-only";
 import { GROUNDING_MODE_INFO, type GroundingMode } from "@bots/core/rag";
+import { normalizeActions, normalizeAppearance, type Action, type Appearance } from "@bots/core/widget/defaults";
 import { petSpecSchema, type PetSpec } from "@bots/core/pet";
 import postgres from "postgres";
 import { getSession } from "./session.js";
@@ -81,6 +82,8 @@ export interface BotDetail extends BotSummary {
   fallbackMessage: string;
   gateThreshold: number;
   suggestedPrompts: string[];
+  appearance: Appearance;
+  actions: Action[];
 }
 
 export async function getBot(botId: string): Promise<BotDetail | null> {
@@ -88,7 +91,7 @@ export async function getBot(botId: string): Promise<BotDetail | null> {
     const rows = await tx<Record<string, never>[]>`
       SELECT b.id, b.name, b.public_key, b.grounding_mode, b.grounding_mode_ack_at,
              b.allowed_origins, b.system_prompt, b.fallback_message, b.gate_threshold,
-             b.suggested_prompts,
+             b.suggested_prompts, b.appearance, b.actions,
              (SELECT count(*) FROM documents d WHERE d.bot_id = b.id) AS documents,
              (SELECT count(*) FROM chunks c WHERE c.bot_id = b.id) AS chunks,
              (SELECT p.name FROM pets p WHERE p.bot_id = b.id AND p.is_active LIMIT 1) AS active_pet_name
@@ -104,6 +107,8 @@ export async function getBot(botId: string): Promise<BotDetail | null> {
       fallbackMessage: r.fallback_message as string,
       gateThreshold: Number(r.gate_threshold),
       suggestedPrompts: r.suggested_prompts as string[],
+      appearance: normalizeAppearance(r.appearance),
+      actions: normalizeActions(r.actions),
       documents: Number(r.documents), chunks: Number(r.chunks),
       activePetName: r.active_pet_name as string | null,
     };

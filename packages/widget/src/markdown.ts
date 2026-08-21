@@ -30,13 +30,19 @@ function inline(text: string, key: string): ComponentChild[] {
       out.push(h("code", { key: `${key}-c${i}` }, part.slice(1, -1)));
     } else if (CITATION.test(part)) {
       CITATION.lastIndex = 0;
-      out.push(h("sup", { key: `${key}-s${i}`, class: "cite" }, part.slice(2, -1)));
+      out.push(h("sup", { key: `${key}-s${i}`, class: "cite" }, part.slice(1, -1)));
     } else {
       out.push(part);
     }
   });
   return out;
 }
+
+/** A pipe row → its cells, with the leading/trailing pipes dropped. */
+const cells = (line: string): string[] =>
+  line.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => c.trim());
+
+const isDelimiter = (line: string): boolean => /^\s*\|?[\s:-]*-[\s:|-]*\|?\s*$/.test(line);
 
 export function markdown(text: string): ComponentChild[] {
   const blocks: ComponentChild[] = [];
@@ -50,10 +56,44 @@ export function markdown(text: string): ComponentChild[] {
     list = null;
   };
 
-  for (const raw of text.split("\n")) {
-    const line = raw.trimEnd();
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!.trimEnd();
     if (!line.trim()) {
       flush();
+      continue;
+    }
+
+    // Tables. The knowledge base is full of them — plan comparisons, limits —
+    // and the model reproduces them faithfully, so rendering the raw pipes was
+    // showing visitors the markup instead of the answer.
+    if (line.includes("|") && isDelimiter(lines[i + 1] ?? "")) {
+      flush();
+      const header = cells(line);
+      const rows: string[][] = [];
+      i += 2;
+      while (i < lines.length && lines[i]!.includes("|")) {
+        rows.push(cells(lines[i]!));
+        i++;
+      }
+      i--;
+      blocks.push(
+        h("table", { key: key++ }, [
+          h("thead", { key: "h" }, h("tr", {}, header.map((c, j) => h("th", { key: j }, inline(c, `th${j}`))))),
+          h(
+            "tbody",
+            { key: "b" },
+            rows.map((r, ri) =>
+              h(
+                "tr",
+                { key: ri },
+                // Pad short rows so cells never shift a column left.
+                header.map((_, ci) => h("td", { key: ci }, inline(r[ci] ?? "", `td${ri}-${ci}`))),
+              ),
+            ),
+          ),
+        ]),
+      );
       continue;
     }
 

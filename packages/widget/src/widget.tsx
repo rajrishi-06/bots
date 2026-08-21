@@ -2,6 +2,7 @@ import type { PetSpec } from "@bots/core/pet";
 import { PetRig } from "@bots/pet-engine";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
+import { normalizeActions } from "@bots/core/widget/defaults";
 import { BotClient, StreamError, type BotConfig, type Turn } from "./api.js";
 import { markdown } from "./markdown.js";
 import {
@@ -65,6 +66,12 @@ export function Widget({
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | undefined>();
+  const [thumb, setThumb] = useState<boolean | null>(null);
+
+  // Unusable actions are dropped at the boundary rather than at render time, so
+  // one malformed entry cannot take the whole widget down with it.
+  const actions = normalizeActions(config.actions);
 
   const rigRef = useRef<PetRig | null>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
@@ -248,6 +255,13 @@ export function Widget({
     try {
       await client.chat(content, turns, {
         signal: controller.signal,
+        conversationId,
+        onDone: (info) => {
+          const id = info.conversationId;
+          if (typeof id === "string") setConversationId(id);
+          // A new answer invalidates the thumb on the previous one.
+          setThumb(null);
+        },
         onDelta: (delta) =>
           setTurns((prev) => {
             const next = [...prev];
@@ -271,6 +285,14 @@ export function Widget({
     }
   };
 
+  const clearAndClose = () => {
+    setOpen(false);
+    setTurns([]);
+    setError(null);
+    setConversationId(undefined);
+    setThumb(null);
+  };
+
   const openPanel = () => {
     setBox(placePanel(posRef.current, window.innerWidth, window.innerHeight));
     setOpen(true);
@@ -289,29 +311,57 @@ export function Widget({
           style={{ left: box.left, top: box.top, width: box.width, height: box.height }}
         >
           <div class="bar">
-            <div class="dots">
-              <button
-                class="dot"
-                style="background:#ff5f57"
-                aria-label="Close and clear the conversation"
-                onClick={() => {
-                  setOpen(false);
-                  setTurns([]);
-                  setError(null);
-                }}
-              />
-              <button
-                class="dot"
-                style="background:#febc2e"
-                aria-label="Minimise, keeping the conversation"
-                onClick={() => setOpen(false)}
-              />
-              <span class="dot" style="background:#28c840;opacity:.4" aria-hidden="true" />
-            </div>
-            <span class="bar-title">{config.name}</span>
+            {config.appearance.header === "traffic" ? (
+              <>
+                <div class="dots">
+                  <button
+                    class="dot" style="background:#ff5f57"
+                    aria-label="Close and clear the conversation"
+                    onClick={clearAndClose}
+                  />
+                  <button
+                    class="dot" style="background:#febc2e"
+                    aria-label="Minimise, keeping the conversation"
+                    onClick={() => setOpen(false)}
+                  />
+                  <span class="dot" style="background:#28c840;opacity:.4" aria-hidden="true" />
+                </div>
+                <div class="bar-text">
+                  <div class="bar-name">{config.name}</div>
+                </div>
+              </>
+            ) : (
+              <>
+                {config.appearance.header === "branded" && (
+                  <span class="bar-pet">
+                    <Pet spec={config.pet} />
+                  </span>
+                )}
+                <div class="bar-text">
+                  <div class="bar-name">{config.name}</div>
+                  {config.appearance.header === "branded" && (
+                    <div class="bar-sub">Online</div>
+                  )}
+                </div>
+                <div class="bar-actions">
+                  <button class="icon-btn" aria-label="Clear the conversation" onClick={clearAndClose}>
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+                         width="14" height="14" stroke-linecap="round">
+                      <path d="M3 4h10M6.5 4V2.8h3V4M4.5 4l.6 8.5h5.8L11.5 4" />
+                    </svg>
+                  </button>
+                  <button class="icon-btn" aria-label="Minimise" onClick={() => setOpen(false)}>
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"
+                         width="14" height="14" stroke-linecap="round">
+                      <path d="M4 8h8" />
+                    </svg>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
-          <div class="log" ref={logRef}>
+          <div class={`log b-${config.appearance.bubbles}`} ref={logRef}>
             <div class="row">
               <span class="avatar">
                 <Pet spec={config.pet} />
@@ -350,15 +400,62 @@ export function Widget({
               </div>
             ))}
 
-            {turns.length === 0 && config.suggestedPrompts.length > 0 && (
-              <div class="starters">
+            {turns.length === 0 && (config.suggestedPrompts.length > 0 || actions.length > 0) && (
+              <div class="chips">
                 {config.suggestedPrompts.map((p) => (
-                  <button class="starter" key={p} disabled={streaming} onClick={() => send(p)}>
+                  <button class="chip" key={p} disabled={streaming} onClick={() => send(p)}>
                     {p}
                   </button>
                 ))}
+                {actions.map((a) =>
+                  a.kind === "link" ? (
+                    // noopener/noreferrer: this opens on a page we do not own,
+                    // and window.opener would hand the destination a handle to it.
+                    <a
+                      class="chip action" key={a.id} href={a.value}
+                      target="_blank" rel="noopener noreferrer"
+                    >
+                      {a.label}
+                      <svg viewBox="0 0 16 16" width="11" height="11" fill="none"
+                           stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                        <path d="M6 3h7v7M13 3L6.5 9.5M11 10.5V13H3V5h2.5" />
+                      </svg>
+                    </a>
+                  ) : (
+                    <button class="chip action" key={a.id} disabled={streaming} onClick={() => send(a.value)}>
+                      {a.label}
+                    </button>
+                  ),
+                )}
               </div>
             )}
+
+            {config.appearance.feedback &&
+              conversationId &&
+              !streaming &&
+              turns.at(-1)?.role === "assistant" &&
+              turns.at(-1)!.content && (
+                <div class="feedback">
+                  {([true, false] as const).map((helpful) => (
+                    <button
+                      key={String(helpful)}
+                      data-picked={thumb === helpful}
+                      aria-label={helpful ? "This helped" : "This did not help"}
+                      onClick={() => {
+                        setThumb(helpful);
+                        void client.feedback(conversationId, helpful);
+                      }}
+                    >
+                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+                           style={helpful ? undefined : "transform:rotate(180deg)"}>
+                        <path d="M5 14V7l3.5-5 .8.5a2 2 0 0 1 .8 2.2L9.5 7H13a1.4 1.4 0 0 1 1.3 1.8l-1.2 4A1.6 1.6 0 0 1 11.6 14Z"
+                              stroke-linejoin="round" />
+                        <path d="M5 7H2.5v7H5" stroke-linejoin="round" />
+                      </svg>
+                    </button>
+                  ))}
+                </div>
+              )}
 
             {error && <div class="err">{error}</div>}
           </div>

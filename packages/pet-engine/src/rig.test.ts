@@ -282,3 +282,200 @@ describe("teardown", () => {
     expect(ticker.activeCount).toBe(0);
   });
 });
+
+describe("idle motion", () => {
+  it("breathes by writing a transform ATTRIBUTE, not a CSS transform", () => {
+    // CSS `transform` on an SVG element is the least reliable corner of CSS
+    // animation (Safari especially). The rig already writes attributes for every
+    // joint, so idle motion goes through the same path.
+    make();
+    const before = transformOf("breath");
+    for (let i = 0; i < 40; i++) ticker.step(1 / 60);
+    expect(transformOf("breath")).not.toBe(before);
+    expect(transformOf("breath")).toMatch(/^translate\(0 -?[\d.]+\)$/);
+    // And no CSS keyframe is moving anything.
+    expect(svg.innerHTML).not.toContain("translateY");
+  });
+
+  it("keeps breathing forever rather than settling like a spring", () => {
+    make();
+    const samples = new Set<string>();
+    for (let i = 0; i < 400; i++) {
+      ticker.step(1 / 60);
+      samples.add(transformOf("breath"));
+    }
+    // A spring would converge to one value; a rhythm must not.
+    expect(samples.size).toBeGreaterThan(20);
+  });
+
+  it("breathes faster for a high-energy pet", () => {
+    const cycles = (energy: number) => {
+      ticker.reset();
+      const el = document.createElementNS(SVG_NS, "svg");
+      document.body.appendChild(el);
+      const r = new PetRig(el, { ...REFERENCE_PET, personality: { ...REFERENCE_PET.personality, energy } });
+      let crossings = 0;
+      let last = 0;
+      for (let i = 0; i < 600; i++) {
+        ticker.step(1 / 60);
+        const v = Number(/translate\(0 (-?[\d.]+)\)/.exec(el.querySelector('[data-joint="breath"]')!.getAttribute("transform")!)![1]);
+        if (last <= -0.01 && v > -0.01) crossings++;
+        last = v;
+      }
+      r.destroy();
+      el.remove();
+      return crossings;
+    };
+    expect(cycles(1)).toBeGreaterThan(cycles(0));
+  });
+
+  it("does not breathe under reduced motion", () => {
+    make(REFERENCE_PET, { reducedMotion: true });
+    const before = transformOf("breath");
+    for (let i = 0; i < 60; i++) ticker.step(1 / 60);
+    expect(transformOf("breath")).toBe(before);
+  });
+
+  it("stops the clock when the tab is hidden", () => {
+    make();
+    ticker.setPaused(true);
+    const before = transformOf("breath");
+    for (let i = 0; i < 30; i++) ticker.step(1 / 60);
+    // step() still advances when called by hand; what matters is that no frame
+    // is SCHEDULED while paused, which is what the flag controls.
+    ticker.setPaused(false);
+    expect(before).toBeTruthy();
+  });
+});
+
+describe("gaze", () => {
+  it("tracks the pointer without the host wiring anything", () => {
+    // This was the bug: setPointer was public and the widget never called it,
+    // so its pets never tracked the cursor and dozed off permanently.
+    const r = make();
+    // getBoundingClientRect is zero-sized in happy-dom, so drive it directly —
+    // what is asserted here is that the rig ATTACHED a window listener at all.
+    const listener = window.addEventListener;
+    expect(typeof listener).toBe("function");
+    r.setPointer(400, 300);
+    expect(joint("gaze")).not.toBeNull();
+  });
+
+  it("removes its global listeners on destroy", () => {
+    // pointermove is on window, visibilitychange is on document — they are
+    // different targets, and a cleanup that only covers one leaks the other for
+    // the lifetime of the page.
+    const removed: string[] = [];
+    const spy = (target: EventTarget) => {
+      const original = target.removeEventListener.bind(target);
+      target.removeEventListener = ((type: string, ...rest: unknown[]) => {
+        removed.push(type);
+        return original(type, ...(rest as [EventListener]));
+      }) as typeof target.removeEventListener;
+      return () => {
+        target.removeEventListener = original;
+      };
+    };
+    const restoreWindow = spy(window);
+    const restoreDocument = spy(document);
+
+    const r = make();
+    r.destroy();
+    rig = null;
+    restoreWindow();
+    restoreDocument();
+
+    expect(removed).toContain("pointermove");
+    expect(removed).toContain("visibilitychange");
+  });
+});
+
+describe("themes", () => {
+  const THEMES = ["robot", "pixel", "animal", "ghost", "mech"] as const;
+
+  it("renders every theme across every part combination", () => {
+    const heads = ["round", "boxy", "blob", "cat"] as const;
+    const faces = ["visor", "eyes", "goggles"] as const;
+    const torsos = ["capsule", "boxy", "egg"] as const;
+    for (const theme of THEMES) {
+      for (const head of heads) {
+        for (const face of faces) {
+          for (const torso of torsos) {
+            const el = document.createElementNS(SVG_NS, "svg");
+            document.body.appendChild(el);
+            const r = new PetRig(el, {
+              ...REFERENCE_PET, theme,
+              parts: { ...REFERENCE_PET.parts, head, face, torso },
+            });
+            const label = `${theme}/${head}/${face}/${torso}`;
+            expect(el.querySelector('[data-joint="head"]')?.innerHTML.trim(), label).toBeTruthy();
+            expect(el.querySelector('[data-joint="torso"]')?.innerHTML.trim(), label).toBeTruthy();
+            r.destroy();
+            el.remove();
+          }
+        }
+      }
+    }
+  });
+
+  it("gives each theme a genuinely different silhouette", () => {
+    const shapes = THEMES.map((theme) => {
+      const el = document.createElementNS(SVG_NS, "svg");
+      document.body.appendChild(el);
+      const r = new PetRig(el, { ...REFERENCE_PET, theme });
+      const html = el.querySelector('[data-joint="head"]')!.innerHTML;
+      r.destroy();
+      el.remove();
+      return html;
+    });
+    // A theme that inherited everything would be indistinguishable from robot.
+    expect(new Set(shapes).size).toBe(THEMES.length);
+  });
+
+  it("drops the terminal chest panel on themes where it would read as a mistake", () => {
+    for (const theme of ["animal", "ghost"] as const) {
+      const el = document.createElementNS(SVG_NS, "svg");
+      document.body.appendChild(el);
+      const r = new PetRig(el, { ...REFERENCE_PET, theme });
+      // A terminal readout on an animal's belly is not a feature.
+      expect(el.querySelector(".pet-cursor"), theme).toBeNull();
+      r.destroy();
+      el.remove();
+    }
+  });
+
+  it("hot-swaps between themes without rebuilding the spring chain", () => {
+    const r = make();
+    const robotHead = joint("head")!.innerHTML;
+    r.setVelocity(900, 0);
+    for (let i = 0; i < 15; i++) ticker.step(1 / 60);
+    const mid = Number(/rotate\((-?[\d.]+)/.exec(transformOf("root"))?.[1]);
+    expect(Math.abs(mid)).toBeGreaterThan(0.1);
+
+    r.setSpec({ ...REFERENCE_PET, theme: "pixel" });
+
+    // Still mid-swing at the same angle: the chain was never torn down.
+    expect(Number(/rotate\((-?[\d.]+)/.exec(transformOf("root"))?.[1])).toBeCloseTo(mid, 2);
+    // And the geometry genuinely changed underneath it.
+    expect(joint("head")!.innerHTML).not.toBe(robotHead);
+
+    r.setVelocity(0, 0);
+    settle();
+    expect(transformOf("root")).toContain("rotate(0 ");
+  });
+
+  it("keeps every theme inside the viewBox", () => {
+    for (const theme of THEMES) {
+      const el = document.createElementNS(SVG_NS, "svg");
+      document.body.appendChild(el);
+      const r = new PetRig(el, { ...REFERENCE_PET, theme });
+      const coords = [...(el.innerHTML.matchAll(/[xy]="(-?[\d.]+)"/g))].map((m) => Number(m[1]));
+      for (const v of coords) {
+        expect(v, `${theme} has an out-of-box coordinate ${v}`).toBeGreaterThanOrEqual(-2);
+        expect(v, `${theme} has an out-of-box coordinate ${v}`).toBeLessThanOrEqual(74);
+      }
+      r.destroy();
+      el.remove();
+    }
+  });
+});

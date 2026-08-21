@@ -1,6 +1,6 @@
 import type { ModelProvider } from "../models/provider.js";
 import { describePaletteIssues, validatePetPalette } from "./palette.js";
-import { PART_OPTIONS, SKELETONS, petSpecSchema, type PetSpec } from "./spec.js";
+import { PART_OPTIONS, SKELETONS, THEMES, petSpecSchema, type PetSpec } from "./spec.js";
 
 /**
  * Prompt → PetSpec.
@@ -24,6 +24,7 @@ const responseSchema = {
   type: "OBJECT",
   properties: {
     name: { type: "STRING" },
+    theme: { type: "STRING", enum: [...THEMES] },
     skeleton: { type: "STRING", enum: [...SKELETONS] },
     parts: {
       type: "OBJECT",
@@ -55,10 +56,19 @@ const responseSchema = {
       required: ["energy", "curiosity", "blurb"],
     },
   },
-  required: ["name", "skeleton", "parts", "palette", "personality"],
+  required: ["name", "theme", "skeleton", "parts", "palette", "personality"],
 } as const;
 
 const SYSTEM = `You design small on-screen creatures by SELECTING from a fixed parts library and choosing a colour palette. You never draw; you never emit SVG, paths, or coordinates.
+
+THEME — the visual family, chosen first because it sets everything else's look:
+  robot   clean machine, panels and a visor. The default.
+  pixel   blocky and stepped. Nothing curves. Retro-game.
+  animal  soft and organic. Snouts, ear tufts, rounded haunches.
+  ghost   a wisp with a tapered, ragged hem and no feet.
+  mech    angular and armoured. Hard bevels, a jaw plate.
+Pick the theme the description actually implies: a frog or a cat is "animal", a
+retro sprite is "pixel", a spirit or a wisp is "ghost", a war machine is "mech".
 
 PARTS — pick exactly one option per slot:
 ${Object.entries(PART_OPTIONS)

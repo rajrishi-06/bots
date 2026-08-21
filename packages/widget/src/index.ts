@@ -1,6 +1,9 @@
 import { render } from "preact";
 import { h } from "preact";
-import { BotClient } from "./api.js";
+// The zod-free normaliser: the API already validates with the schemas, and
+// importing zod here cost 20 kB gzip against a 30 kB budget.
+import { normalizeActions, normalizeAppearance } from "@bots/core/widget/defaults";
+import { BotClient, type BotConfig } from "./api.js";
 import { stylesheet } from "./styles.js";
 import { Widget, configureStorage } from "./widget.js";
 
@@ -29,9 +32,19 @@ export async function mount(opts: MountOptions): Promise<() => void> {
   // Config first: the pet's palette drives the stylesheet, so there is nothing
   // sensible to paint before it arrives. A failure here is silent by design —
   // a broken embed must never put an error box on a customer's page.
-  let config;
+  let config: BotConfig;
   try {
-    config = await client.config();
+    const raw = (await client.config()) as Partial<BotConfig>;
+    // Normalise at the boundary. A widget cached on a customer's CDN can outlive
+    // several API versions, and a config missing a field it has never heard of
+    // must degrade to the default rather than throw on first render.
+    config = {
+      ...raw,
+      appearance: normalizeAppearance(raw.appearance),
+      actions: normalizeActions(raw.actions),
+      suggestedPrompts: raw.suggestedPrompts ?? [],
+      greeting: raw.greeting ?? "Hi — how can I help?",
+    } as BotConfig;
   } catch (err) {
     console.warn("[petbot] could not load bot config:", err);
     return () => {};
@@ -44,7 +57,7 @@ export async function mount(opts: MountOptions): Promise<() => void> {
   const root = host.attachShadow({ mode: "closed" });
 
   const style = document.createElement("style");
-  style.textContent = stylesheet(config.pet.palette);
+  style.textContent = stylesheet(config.pet.palette, config.appearance);
   root.appendChild(style);
 
   const app = document.createElement("div");

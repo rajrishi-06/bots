@@ -1,4 +1,5 @@
 import { Section } from "@/components/Shell";
+import { AppearanceEditor } from "@/components/AppearanceEditor";
 import { EmbedSnippet } from "@/components/EmbedSnippet";
 import { GroundingControl } from "@/components/GroundingControl";
 import { getBot } from "@/lib/data";
@@ -42,7 +43,15 @@ export default async function EmbedPage({ params }: { params: Promise<{ id: stri
         )}
       </Section>
 
-      <Section n="06" label="Grounding" title="What the bot is allowed to answer">
+      <Section n="06" label="Appearance" title="How the widget looks">
+        <AppearanceEditor
+          botId={bot.id}
+          initialAppearance={bot.appearance}
+          initialActions={bot.actions}
+        />
+      </Section>
+
+      <Section n="07" label="Grounding" title="What the bot is allowed to answer">
         <GroundingControl
           botId={bot.id}
           mode={bot.groundingMode}

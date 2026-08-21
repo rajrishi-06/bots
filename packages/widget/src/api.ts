@@ -1,4 +1,5 @@
 import type { PetSpec } from "@bots/core/pet";
+import type { Action, Appearance } from "@bots/core/widget/defaults";
 
 /**
  * Thin client for the bot backend.
@@ -13,6 +14,8 @@ export interface BotConfig {
   greeting: string;
   suggestedPrompts: string[];
   groundingMode: "strict" | "blended" | "open";
+  appearance: Appearance;
+  actions: Action[];
 }
 
 export interface Turn {
@@ -21,6 +24,25 @@ export interface Turn {
 }
 
 export class StreamError extends Error {}
+
+/**
+ * A stable per-browser id, so a returning visitor's conversations group together.
+ * Random and stored locally — it identifies a browser, never a person, and it is
+ * never derived from anything about them.
+ */
+function visitorId(): string {
+  const KEY = "petbot:visitor";
+  try {
+    let id = localStorage.getItem(KEY);
+    if (!id) {
+      id = `v_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+      localStorage.setItem(KEY, id);
+    }
+    return id;
+  } catch {
+    return "v_anon"; // private mode
+  }
+}
 
 async function consumeSSE(
   res: Response,
@@ -85,14 +107,36 @@ export class BotClient {
   async chat(
     message: string,
     history: Turn[],
-    opts: { onDelta: (t: string) => void; onDone?: (i: Record<string, unknown>) => void; signal?: AbortSignal },
+    opts: {
+      onDelta: (t: string) => void;
+      onDone?: (i: Record<string, unknown>) => void;
+      signal?: AbortSignal;
+      conversationId?: string;
+    },
   ): Promise<void> {
     const res = await fetch(`${this.base}/v1/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ botKey: this.botKey, message, history }),
+      body: JSON.stringify({
+        botKey: this.botKey, message, history,
+        conversationId: opts.conversationId,
+        visitorId: visitorId(),
+      }),
       signal: opts.signal,
     });
     await consumeSSE(res, opts.onDelta, opts.onDone);
+  }
+
+  /** Fire-and-forget: a failed thumb must never surface to the visitor. */
+  async feedback(conversationId: string, helpful: boolean): Promise<void> {
+    try {
+      await fetch(`${this.base}/v1/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ botKey: this.botKey, conversationId, helpful }),
+      });
+    } catch {
+      /* the visitor already told us what they think; the record is our problem */
+    }
   }
 }
